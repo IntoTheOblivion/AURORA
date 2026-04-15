@@ -15,11 +15,11 @@ Il plugin utilizza **FastAPI** come server e offre la possibilità di scegliere 
 
 ## 📁 Struttura del Progetto
 
-Tutto il codice principale della versione finale risiede nella cartella `bitm-plugin-v5-final`:
+Tutto il codice principale della versione finale risiede nella cartella `bitm-plugin`:
 
 - `app/` - Contiene i moduli della logica centrale di FastAPI (`main.py`, `config.py`, `scorer.py` etc.).
 - `diagnose.py` - Script per la diagnostica della piattaforma (utile per eseguire test manuali).
-- `run.py` - Entry point v5 incaricato di caricare configurazioni e lanciare un worker di uvicorn.
+- `run.py` - Entry point incaricato di caricare configurazioni e lanciare un worker di uvicorn.
 - `requirements.txt` - Le dipendenze per l'ambiente virtuale python.
 - `test_report.json` e `bitm_events.jsonl` - Files di log o report generati.
 
@@ -33,7 +33,7 @@ Tutto il codice principale della versione finale risiede nella cartella `bitm-pl
 1. **Clona/spostati nella cartella root:**
    ```bash
    # (Se ancora non sei nella directory) e poi vai nel plugin core
-   cd bitm-plugin-v5-final
+   cd bitm-plugin
    ```
 
 2. **Setup dell'ambiente virtuale (Consigliato):**
@@ -61,7 +61,7 @@ Tutto il codice principale della versione finale risiede nella cartella `bitm-pl
 
 ## 🚀 Utilizzo (Avvio API)
 
-Dalla cartella in cui si risiede (`bitm-plugin-v5-final`), per far partire l'istanza back-end esegui il file di lancio:
+Dalla cartella in cui si risiede (`bitm-plugin`), per far partire l'istanza back-end esegui il file di lancio:
 
 ```bash
 python run.py
