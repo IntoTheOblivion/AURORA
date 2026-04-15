@@ -1,0 +1,231 @@
+{
+  "timestamp": "2026-04-15T12:39:00.590828",
+  "passed": 12,
+  "total": 12,
+  "accuracy": 1.0,
+  "results": [
+    {
+      "id": "T01",
+      "cat": "legit",
+      "name": "Chrome / Windows / Italia",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "default",
+      "plugin_ms": 11558.8,
+      "total_ms": 11560
+    },
+    {
+      "id": "T02",
+      "cat": "legit",
+      "name": "Firefox / macOS / Italia",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "admin",
+      "plugin_ms": 1524.0,
+      "total_ms": 1526
+    },
+    {
+      "id": "T03",
+      "cat": "legit",
+      "name": "Safari / iPhone / Italia (zero plugin = normale)",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "default",
+      "plugin_ms": 1494.5,
+      "total_ms": 1496
+    },
+    {
+      "id": "T04",
+      "cat": "legit",
+      "name": "Edge / Windows / Italia",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "default",
+      "plugin_ms": 1496.7,
+      "total_ms": 1498
+    },
+    {
+      "id": "T05",
+      "cat": "attack",
+      "name": "HeadlessChrome / Evilginx",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "pre": "—",
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "headless_ua",
+        "webdriver_flag",
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 2
+    },
+    {
+      "id": "T06",
+      "cat": "attack",
+      "name": "Playwright / webdriver=true / SwiftShader",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "pre": "—",
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "webdriver_flag"
+      ],
+      "reason": "Segnale critico: webdriver_flag, webdriver_true",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 2
+    },
+    {
+      "id": "T07",
+      "cat": "attack",
+      "name": "Selenium / no plugin + no WebGL / desktop",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "pre": "—",
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: no_plugins_no_webgl",
+      "context": "payment",
+      "plugin_ms": 0.1,
+      "total_ms": 2
+    },
+    {
+      "id": "T08",
+      "cat": "attack",
+      "name": "Tor exit node / checkout",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "pre": "—",
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "tor_exit_node"
+      ],
+      "reason": "Segnale critico: tor_exit_node",
+      "context": "payment",
+      "plugin_ms": 0.1,
+      "total_ms": 2
+    },
+    {
+      "id": "T09",
+      "cat": "suspicious",
+      "name": "VPN + pagina login",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.12,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "vpn_detected"
+      ],
+      "reason": "[ctx=login boost=0.16] browser reale, VPN in uso",
+      "context": "login",
+      "plugin_ms": 1697.4,
+      "total_ms": 1699
+    },
+    {
+      "id": "T10",
+      "cat": "suspicious",
+      "name": "Latenza alta (380ms) / pagamento",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.22,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "high_latency_380ms"
+      ],
+      "reason": "latenza media 380ms su richiesta",
+      "context": "payment",
+      "plugin_ms": 1644.7,
+      "total_ms": 1646
+    },
+    {
+      "id": "T11",
+      "cat": "suspicious",
+      "name": "VPN + canvas vuoto + login",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.27,
+      "pre": "—",
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "empty_canvas",
+        "vpn_detected"
+      ],
+      "reason": "[ctx=login boost=0.23] browser reale, comportamento normale ma segnali ambigui",
+      "context": "login",
+      "plugin_ms": 1920.9,
+      "total_ms": 1923
+    },
+    {
+      "id": "T12",
+      "cat": "suspicious",
+      "name": "Timezone UTC + lingua italiana (anomalia)",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.1,
+      "pre": "—",
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "timezone_anomaly"
+      ],
+      "reason": "[ctx=admin boost=0.12] browser reale, anomalia timezone",
+      "context": "admin",
+      "plugin_ms": 1592.5,
+      "total_ms": 1594
+    }
+  ]
+}
