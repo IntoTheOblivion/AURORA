@@ -1,12 +1,12 @@
 """
-BitM Detection Plugin — Test Suite v6
+BitM Detection Plugin — Test Suite v6.2
 
 Copertura:
   • legit      → browser reali in vari contesti
   • attack     → bot/headless/automazione
   • suspicious → segnali ambigui in pagine sensibili
   • edge       → casi limite (payload minimi, UA unicode, sequenze)
-  • system     → feature v6.0 (session store, GeoIP, rate-limit, admin)
+  • system     → feature v6.x (session store, GeoIP, rate-limit, admin, webhook)
 
 Esecuzione:
   python tests/run_tests.py
@@ -385,21 +385,23 @@ def _headless_payload(sid: str, page: str = "/login") -> dict:
 
 
 async def sys_health(client: httpx.AsyncClient, base: str) -> dict:
-    """S01 — /health deve esporre versione 6.x, store e stato GeoIP."""
+    """S01 — /health deve esporre versione 6.x, store, GeoIP e webhook."""
     passed, detail = True, []
     try:
         r = await client.get(f"{base}/health", timeout=5)
         j = r.json()
         if not str(j.get("version", "")).startswith("6."):
             passed = False; detail.append(f"versione non 6.x ({j.get('version')})")
-        for k in ("store", "geoip", "sessions", "blocked_ips"):
+        for k in ("store", "geoip", "sessions", "blocked_ips", "webhook"):
             if k not in j:
                 passed = False; detail.append(f"manca campo {k}")
-        return {"id": "S01", "cat": "system", "name": "Health esposto v6 (store/geoip)",
+        return {"id": "S01", "cat": "system",
+                "name": "Health esposto v6.2 (store/geoip/webhook)",
                 "passed": passed, "detail": "; ".join(detail) or "ok",
                 "extra": j}
     except Exception as e:
-        return {"id": "S01", "cat": "system", "name": "Health esposto v6 (store/geoip)",
+        return {"id": "S01", "cat": "system",
+                "name": "Health esposto v6.2 (store/geoip/webhook)",
                 "passed": False, "detail": f"errore: {e}"}
 
 
@@ -519,6 +521,67 @@ async def sys_cache_speedup(client: httpx.AsyncClient, base: str) -> dict:
     }
 
 
+async def sys_webhook_field(client: httpx.AsyncClient, base: str) -> dict:
+    """S08 — /health espone il campo 'webhook' con struttura valida (v6.2)."""
+    passed, detail = True, []
+    try:
+        r = await client.get(f"{base}/health", timeout=5)
+        j = r.json()
+        wh = j.get("webhook")
+        if wh is None:
+            passed = False
+            detail.append("campo 'webhook' assente in /health")
+        elif not isinstance(wh, dict):
+            passed = False
+            detail.append(f"'webhook' non è un oggetto: {wh!r}")
+        else:
+            if "enabled" not in wh:
+                passed = False
+                detail.append("manca 'enabled' in webhook")
+            # Se abilitato deve avere almeno type e url
+            if wh.get("enabled"):
+                for k in ("type", "url", "timeout", "retries"):
+                    if k not in wh:
+                        passed = False
+                        detail.append(f"manca '{k}' nel webhook abilitato")
+        return {
+            "id": "S08", "cat": "system",
+            "name": "Webhook push — campo esposto in /health (v6.2)",
+            "passed": passed,
+            "detail": "; ".join(detail) or f"ok  enabled={wh.get('enabled')}",
+            "extra": wh,
+        }
+    except Exception as e:
+        return {
+            "id": "S08", "cat": "system",
+            "name": "Webhook push — campo esposto in /health (v6.2)",
+            "passed": False, "detail": f"errore: {e}",
+        }
+
+
+async def sys_webhook_nonblocking(client: httpx.AsyncClient, base: str) -> dict:
+    """S09 — un evento BLOCK con webhook irraggiungibile non rallenta la risposta."""
+    # Inviamo un headless BLOCK e misuriamo il round-trip dal client.
+    # Se il notifier fosse bloccante, questo supererebbe di molto il WEBHOOK_TIMEOUT.
+    # Con fire-and-forget il round-trip dev'essere < 4000ms anche se il webhook pende.
+    sid = f"nb-{uuid.uuid4().hex[:6]}"
+    t0  = time.time()
+    r   = await client.post(
+        f"{base}/api/bitm/collect",
+        json=_headless_payload(sid),
+        timeout=30,
+    )
+    elapsed_ms = round((time.time() - t0) * 1000)
+    passed = r.status_code == 200 and elapsed_ms < 4000
+    return {
+        "id": "S09", "cat": "system",
+        "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
+        "passed": passed,
+        "detail": (f"status={r.status_code}  round-trip={elapsed_ms}ms  "
+                   f"action={r.json().get('action','?')} (atteso block, <4000ms)"),
+    }
+
+
 SYSTEM_CHECKS = [
     sys_health,
     sys_session_persistence,
@@ -527,6 +590,8 @@ SYSTEM_CHECKS = [
     sys_geoip_private,
     sys_admin_clear,
     sys_cache_speedup,
+    sys_webhook_field,
+    sys_webhook_nonblocking,
 ]
 
 
@@ -544,7 +609,7 @@ def print_report(cases: list, systems: list) -> dict:
         by_cat.setdefault(r["cat"], []).append(r)
 
     print(f"\n{B}{'='*72}{X}")
-    print(f"{B}  BitM Detection Plugin v6 — Test Suite{X}")
+    print(f"{B}  BitM Detection Plugin v6.2 — Test Suite{X}")
     print(f"{'='*72}")
 
     for cat in ("legit", "attack", "suspicious", "edge"):
@@ -571,7 +636,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     if systems:
         sys_pass = sum(1 for r in systems if r["passed"])
-        print(f"\n{B}SYSTEM v6.0 ({sys_pass}/{len(systems)}){X}")
+        print(f"\n{B}SYSTEM v6.2 ({sys_pass}/{len(systems)}){X}")
         for r in systems:
             icon = f"{G}✓{X}" if r["passed"] else f"{R}✗{X}"
             print(f"  {icon} [{r['id']}] {r['name']}")
@@ -586,7 +651,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "version":   "6.0",
+        "version":   "6.2",
         "passed":    passed,
         "total":     total,
         "accuracy":  round(passed / total, 3) if total else 0,
@@ -615,7 +680,7 @@ def _select(cases: list, flt: str | None, only: str | None) -> list:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="BitM Test Suite v6")
+    parser = argparse.ArgumentParser(description="BitM Test Suite v6.2")
     parser.add_argument("--filter", help="Categorie separate da virgola (legit,attack,...)")
     parser.add_argument("--only",   help="ID specifici separati da virgola (T01,T05,...)")
     parser.add_argument("--parallel", type=int, default=1,
@@ -670,7 +735,7 @@ async def main():
         # System checks v6
         systems: list = []
         if not args.skip_system and not args.only:
-            print(f"\n  {C}── SYSTEM CHECKS v6.0 ──{X}")
+            print(f"\n  {C}── SYSTEM CHECKS v6.2 ──{X}")
             # Reset prima dei system check
             try:
                 await client.delete(f"{base}/api/bitm/sessions", timeout=10)

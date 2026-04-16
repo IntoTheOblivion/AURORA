@@ -21,6 +21,13 @@ Variabili supportate:
   # GeoIP (MaxMind GeoLite2)
   MAXMIND_CITY_DB=/path/to/GeoLite2-City.mmdb
   MAXMIND_ASN_DB=/path/to/GeoLite2-ASN.mmdb
+
+  # Webhook push notifications (v6.2)
+  WEBHOOK_URL=https://hooks.slack.com/services/...
+  WEBHOOK_TYPE=slack           slack | teams | siem  (default: siem)
+  WEBHOOK_TIMEOUT=5            secondi per richiesta HTTP (default: 5)
+  WEBHOOK_RETRIES=3            tentativi in caso di errore (default: 3)
+  WEBHOOK_CONFIG_FILE=/path/to/webhook.json   config completa via JSON
 """
 
 import os
@@ -44,11 +51,17 @@ OLLAMA_HOST: str    = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip(
 OLLAMA_MODEL: str   = os.getenv("OLLAMA_MODEL", "llama3.1")
 OLLAMA_TIMEOUT: int = int(os.getenv("OLLAMA_TIMEOUT", "60"))
 
-# ── Redis & Webhook ───────────────────────────────────────────────────────────
+# ── Redis ─────────────────────────────────────────────────────────────────────
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_SESSION_TTL: int = int(os.getenv("REDIS_SESSION_TTL", "3600"))
 REDIS_KEY_PREFIX: str = os.getenv("REDIS_KEY_PREFIX", "bitm:")
-WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "")
+
+# ── Webhook push notifications (v6.2) ─────────────────────────────────────────
+WEBHOOK_URL: str         = os.getenv("WEBHOOK_URL", "").strip()
+WEBHOOK_TYPE: str        = os.getenv("WEBHOOK_TYPE", "siem").strip().lower()
+WEBHOOK_TIMEOUT: float   = float(os.getenv("WEBHOOK_TIMEOUT", "5"))
+WEBHOOK_RETRIES: int     = int(os.getenv("WEBHOOK_RETRIES", "3"))
+WEBHOOK_CONFIG_FILE: str = os.getenv("WEBHOOK_CONFIG_FILE", "").strip()
 
 # ── GeoIP (MaxMind GeoLite2) ──────────────────────────────────────────────────
 MAXMIND_CITY_DB: str = os.getenv("MAXMIND_CITY_DB", "").strip()

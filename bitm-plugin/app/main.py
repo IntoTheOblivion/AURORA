@@ -1,10 +1,14 @@
 """
-BitM Detection Plugin — FastAPI server v6
+BitM Detection Plugin — FastAPI server v6.2
 
 Novità v6:
 - Sessioni persistenti su Redis (SessionStore), condivisibili tra processi/istanze
 - Arricchimento automatico della Request con metadati GeoIP (Country/ASN/ISP)
 - Rimossa la gestione manuale di ip_meta dal payload client
+
+Novità v6.2:
+- Modulo notifier: webhook push asincrono per eventi BLOCK
+  (Slack Blocks API, Microsoft Teams Adaptive Cards, SIEM JSON)
 """
 
 import time
@@ -22,8 +26,9 @@ from app.logger import log_event
 from app.redis_client import get_store
 from app.geoip import resolve as geoip_resolve, summary as geoip_summary
 from app.broadcaster import get_broadcaster
+from app.notifier import notify_block, webhook_status
 
-app = FastAPI(title="BitM Detection Plugin", version="6.1.0")
+app = FastAPI(title="BitM Detection Plugin", version="6.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -89,7 +94,7 @@ async def index():
 async def health():
     return {
         "status":      "ok",
-        "version":     "6.1.0",
+        "version":     "6.2.0",
         "backend":     LLM_BACKEND,
         "model":       get_selected_model(),
         "sessions":    await _store.session_count(),
@@ -97,6 +102,7 @@ async def health():
         "store":       _store.backend,
         "geoip":       geoip_summary(),
         "ws_clients":  _broadcaster.client_count,
+        "webhook":     webhook_status(),
     }
 
 
@@ -175,6 +181,7 @@ async def collect(request: Request, body: dict):
     elapsed = round((time.time() - t0) * 1000, 1)
     entry   = log_event(ip, sid, features, result, action, elapsed, context)
     await _broadcaster.publish(entry)
+    notify_block(entry)  # fire-and-forget; no-op se webhook non configurato
 
     return _resp(
         action.value,
