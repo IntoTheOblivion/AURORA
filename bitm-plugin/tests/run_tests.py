@@ -1,13 +1,14 @@
 """
-BitM Detection Plugin — Test Suite v7.0
+BitM Detection Plugin — Test Suite v7.2
 
 Copertura:
   • legit      → browser reali in vari contesti
-  • attack     → bot/headless/automazione
+  • attack     → bot/headless/automazione + stack BitM/BitM+ noti
   • suspicious → segnali ambigui in pagine sensibili
   • edge       → casi limite (payload minimi, UA unicode, sequenze)
   • system     → feature v6.x (session store, GeoIP, rate-limit, admin, webhook)
                  + v7.0 (system prompt compatto, pipeline training)
+                 + v7.2 (coerenza label BitM/BitM+ tra extractor e policy)
 
 Esecuzione:
   python tests/run_tests.py
@@ -309,6 +310,155 @@ CASES: list[dict] = [
             "webdriver": False, "languages": ["en-US"],
             "screenRes": "1920x1080", "colorDepth": 24,
             "timezone": "Europe/Rome", "platform": "Win32", "timing": 17,
+        },
+    },
+
+    # ── BitM / BitM+ — stack documentati in letteratura ──────────────────────
+    # Rif.: Tommasi 2021 (IJIS), Tzschoppe 2023 (EuroSec), Catalano 2025 (JCompVir)
+    {
+        "id": "T21", "cat": "attack",
+        "name": "BitM RFB — noVNC client marker nel title",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t21", "page": "/login",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (Intel)",
+            "canvas": "data:image/png;base64,novncCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/Rome", "platform": "Win32", "timing": 30,
+            # Il collector ha letto document.title = "Login - noVNC" (default del client)
+            "title":     "Login - noVNC",
+            "pageUrl":   "https://abc123.ngrok-free.app/vnc.html",
+        },
+    },
+    {
+        "id": "T22", "cat": "attack",
+        "name": "BitM RDP — Apache Guacamole client",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t22", "page": "/signin",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (Apple M1)",
+            "canvas": "data:image/png;base64,guacaCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1440x900", "colorDepth": 24,
+            "timezone": "UTC", "platform": "MacIntel", "timing": 48,
+            "title":    "Apache Guacamole",
+            "pageUrl":  "https://attacker.example.com:8080/guacamole/#/",
+        },
+    },
+    {
+        "id": "T23", "cat": "attack",
+        "name": "BitM+ xssPayload — loadFromAttacker() nell'URL",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t23", "page": "/auth",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (NVIDIA)",
+            "canvas": "data:image/png;base64,xssCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/London", "platform": "Win32", "timing": 25,
+            # xURL tipico di BitM+ (Catalano 2025 Fig. 11)
+            "pageUrl":  "https://fido.site.demo/login?xssParam=%7BloadFromAttacker(%2Fxss%2Fpayload.js)%7D",
+        },
+    },
+    {
+        "id": "T24", "cat": "attack",
+        "name": "BitM+ evilGet — navigator.credentials.get non nativo",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t24", "page": "/login",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (Intel)",
+            "canvas": "data:image/png;base64,evilgetCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/Rome", "platform": "Win32", "timing": 22,
+            # Collector ha invocato navigator.credentials.get.toString():
+            # se non contiene "[native code]" → sostituito (evilGet).
+            "credentialsGetNative": False,
+        },
+    },
+    {
+        "id": "T25", "cat": "attack",
+        "name": "BitM+ backend port (MalSrv :3081) visibile al client",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t25", "page": "/login",
+            "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (Mesa Intel)",
+            "canvas": "data:image/png;base64,malsrvCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/Berlin", "platform": "Linux x86_64", "timing": 35,
+            # Porte del BE BitM+: 3081=Express MalSrv, 6080=noVNC
+            "pageUrl":  "https://attacker.demo:6080/vnc.html",
+            "referrer": "http://localhost:3081/getChallenge",
+        },
+    },
+    {
+        "id": "T26", "cat": "attack",
+        "name": "BitM UA leak — noVNC nell'User-Agent",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t26", "page": "/login",
+            "userAgent": "Mozilla/5.0 (X11; Linux x86_64) noVNC/1.4.0 WebKit/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (Mesa)",
+            "canvas": "data:image/png;base64,uaLeakCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "UTC", "platform": "Linux x86_64", "timing": 40,
+        },
+    },
+    {
+        "id": "T27", "cat": "attack",
+        "name": "BitM+ WebSocket transport verso tunnel ngrok",
+        "expected": "block",
+        "payload": {
+            "sessionId": "t27", "page": "/payment",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer"], "webgl": "ANGLE (Intel)",
+            "canvas": "data:image/png;base64,wsCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/Rome", "platform": "Win32", "timing": 28,
+            "wsEndpoints": ["wss://abc123.ngrok-free.app/websockify"],
+        },
+    },
+    {
+        "id": "T28", "cat": "suspicious",
+        "name": "ngrok tunnel + login (sospetto, ambiente dev legittimo possibile)",
+        "expected_in": ("challenge", "block"),
+        "payload": {
+            "sessionId": "t28", "page": "/login",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer", "Chrome PDF Viewer"],
+            "webgl": "ANGLE (Intel, Intel(R) UHD Graphics 620)",
+            "canvas": "data:image/png;base64,devCANVAS",
+            "webdriver": False, "languages": ["en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/Rome", "platform": "Win32", "timing": 15,
+            "pageUrl":  "https://myapp.ngrok-free.app/login",
+            "referrer": "https://myapp.ngrok-free.app/",
+        },
+    },
+    {
+        "id": "T29", "cat": "edge",
+        "name": "WebAuthn API nativa confermata → nessun boost",
+        "expected": "allow",
+        "payload": {
+            "sessionId": "t29", "page": "/login",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "plugins": ["PDF Viewer", "Chrome PDF Viewer"],
+            "webgl": "ANGLE (Intel, Intel(R) UHD Graphics 620)",
+            "canvas": "data:image/png;base64,nativewebauthnCANVAS",
+            "webdriver": False, "languages": ["it-IT", "en-US"],
+            "screenRes": "1920x1080", "colorDepth": 24,
+            "timezone": "Europe/Rome", "platform": "Win32", "timing": 11,
+            "credentialsGetNative": True,
+            "title":    "Login",
         },
     },
 ]
@@ -777,6 +927,53 @@ async def sys_train_lora_cli(client: httpx.AsyncClient, base: str) -> dict:
     }
 
 
+async def sys_bitm_labels_aligned(client: httpx.AsyncClient, base: str) -> dict:
+    """S13 — i label BitM/BitM+ emessi da extractor sono presenti in policy.CRITICAL_BLOCK."""
+    try:
+        if str(_ROOT) not in sys.path:
+            sys.path.insert(0, str(_ROOT))
+        from app.policy  import CRITICAL_BLOCK
+        from app.extractor import _detect_bitm
+
+        # Costruiamo un payload che deve emettere TUTTI i label BitM/BitM+
+        raw = {
+            "title":    "Target Login - noVNC and Apache Guacamole",
+            "pageUrl":  "https://a.ngrok-free.app:6080/vnc.html?xssParam=%7BloadFromAttacker(x)%7D",
+            "referrer": "https://a.ngrok-free.app/",
+            "wsEndpoints": ["wss://a.ngrok-free.app/websockify"],
+            "credentialsGetNative": False,
+            "iframeCount": 5,
+        }
+        ua_lower = "mozilla/5.0 novnc/1.4"
+        sigs = set(_detect_bitm(raw, ua_lower))
+
+        required = {
+            "novnc_client_marker", "guacamole_client_marker",
+            "bitm_framework_ua", "bitm_backend_port",
+            "xss_reflected_param", "webauthn_api_override",
+            "bitm_websocket_transport", "tunnel_host", "iframe_overlay",
+        }
+        missing_from_detect  = required - sigs
+        missing_from_policy  = {s for s in required
+                                if s not in CRITICAL_BLOCK
+                                and s not in {"tunnel_host", "iframe_overlay"}}
+        passed = not missing_from_detect and not missing_from_policy
+        return {
+            "id": "S13", "cat": "system",
+            "name": "Label BitM allineati extractor↔policy.CRITICAL_BLOCK",
+            "passed": passed,
+            "detail": (f"detected={len(sigs)}/{len(required)}  "
+                       f"missing_detect={sorted(missing_from_detect) or 'none'}  "
+                       f"missing_policy={sorted(missing_from_policy) or 'none'}"),
+        }
+    except Exception as e:
+        return {
+            "id": "S13", "cat": "system",
+            "name": "Label BitM allineati extractor↔policy.CRITICAL_BLOCK",
+            "passed": False, "detail": f"errore: {e}",
+        }
+
+
 SYSTEM_CHECKS = [
     sys_health,
     sys_session_persistence,
@@ -791,6 +988,8 @@ SYSTEM_CHECKS = [
     sys_prompt_v7_shortened,
     sys_dataset_builder,
     sys_train_lora_cli,
+    # ── v7.2 (BitM/BitM+) ──
+    sys_bitm_labels_aligned,
 ]
 
 
@@ -808,7 +1007,7 @@ def print_report(cases: list, systems: list) -> dict:
         by_cat.setdefault(r["cat"], []).append(r)
 
     print(f"\n{B}{'='*72}{X}")
-    print(f"{B}  BitM Detection Plugin v7.0 — Test Suite{X}")
+    print(f"{B}  BitM Detection Plugin v7.2 — Test Suite{X}")
     print(f"{'='*72}")
 
     for cat in ("legit", "attack", "suspicious", "edge"):
@@ -835,7 +1034,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     if systems:
         sys_pass = sum(1 for r in systems if r["passed"])
-        print(f"\n{B}SYSTEM v6.2 + v7.0 ({sys_pass}/{len(systems)}){X}")
+        print(f"\n{B}SYSTEM v6.2 + v7.0 + v7.2 ({sys_pass}/{len(systems)}){X}")
         for r in systems:
             icon = f"{G}✓{X}" if r["passed"] else f"{R}✗{X}"
             print(f"  {icon} [{r['id']}] {r['name']}")
@@ -850,7 +1049,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "version":   "7.0",
+        "version":   "7.2",
         "passed":    passed,
         "total":     total,
         "accuracy":  round(passed / total, 3) if total else 0,
@@ -879,7 +1078,7 @@ def _select(cases: list, flt: str | None, only: str | None) -> list:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="BitM Test Suite v7.0")
+    parser = argparse.ArgumentParser(description="BitM Test Suite v7.2")
     parser.add_argument("--filter", help="Categorie separate da virgola (legit,attack,...)")
     parser.add_argument("--only",   help="ID specifici separati da virgola (T01,T05,...)")
     parser.add_argument("--parallel", type=int, default=1,

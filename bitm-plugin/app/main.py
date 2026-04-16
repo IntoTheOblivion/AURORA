@@ -221,6 +221,16 @@ def _fast_rules(features: dict) -> list[str]:
     if (features.get("ip_meta") or {}).get("is_tor"):
         signals.append("tor_exit_node")
 
+    # BitM/BitM+ — propaghiamo i marker diagnostici già calcolati dall'extractor
+    # nel fast path. Tutti i label qui sono presenti anche in CRITICAL_BLOCK.
+    bitm_sigs = set(features.get("bitm_signals") or [])
+    for label in ("novnc_client_marker", "guacamole_client_marker",
+                  "bitm_framework_ua", "bitm_backend_port",
+                  "xss_reflected_param", "webauthn_api_override",
+                  "bitm_websocket_transport"):
+        if label in bitm_sigs:
+            signals.append(label)
+
     return signals
 
 

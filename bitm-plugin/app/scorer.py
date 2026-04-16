@@ -39,8 +39,8 @@ _selected_model: str | None = None   # usato solo dal backend Anthropic
 #   4) vincolo di "floor" sul pre_risk_score (coerente con policy.decide)
 # La lunghezza ridotta è validata dal test S01 (health) + test_report LLM.
 SYSTEM_PROMPT = """\
-Rilevi attacchi Browser-in-the-Middle (BitM) analizzando le feature di una \
-sessione web.
+Rilevi attacchi Browser-in-the-Middle (BitM/BitM+) analizzando le feature di \
+una sessione web.
 
 Rispondi SOLO con un oggetto JSON su una singola riga. Nessun testo, commento \
 o markdown fuori dal JSON.
@@ -51,7 +51,7 @@ Schema ESATTO:
 Soglie risk_score → verdict:
  0.00-0.30 → LEGITIMATE (browser reale)
  0.31-0.64 → SUSPICIOUS (segnali ambigui)
- 0.65-1.00 → ATTACK (automazione/proxy/headless)
+ 0.65-1.00 → ATTACK (headless/proxy/noVNC/Guacamole/ngrok/xssPayload)
 
 Vincolo: se pre_risk_score>=0.65 con segnali confermati, non scendere sotto 0.65."""
 
@@ -196,10 +196,14 @@ def _build_prompt(f: dict) -> str:
     headless     = f.get("headless_signals") or []
     headless_str = ", ".join(headless) if headless else "nessuno"
 
+    bitm_sigs = f.get("bitm_signals") or []
+    bitm_str  = ", ".join(bitm_sigs) if bitm_sigs else "nessuno"
+
     return (
         f"=== PUNTEGGIO DETERMINISTICO PRE-CALCOLATO ===\n"
         f"pre_risk_score: {pre_score:.3f}\n"
-        f"Segnali confermati: {confirmed_str}\n\n"
+        f"Segnali confermati: {confirmed_str}\n"
+        f"Marker BitM/BitM+: {bitm_str}\n\n"
         f"=== DETTAGLI BROWSER ===\n"
         f"User-Agent: {(f.get('user_agent') or '?')[:100]}\n"
         f"Browser: {f.get('ua_browser','?')} | OS: {f.get('ua_os','?')} | "

@@ -1,17 +1,62 @@
 """
-Feature Extractor v6
+Feature Extractor v7.2
 - ip_meta arriva come parametro esplicito dal GeoIP resolver
-  (più nessuna lettura diretta da raw["ip_meta"] come ground truth)
-- Tutti gli altri comportamenti v4/v5 invariati.
+- v7.2: rilevamento specifico degli stack BitM/BitM+ documentati in letteratura:
+    * RFB variant: noVNC + WebSockify + TigerVNC  (Tommasi 2021, Tzschoppe 2023)
+    * RDP variant: Apache Guacamole + FreeRDP + Tomcat   (Tzschoppe 2023)
+    * BitM+      : ngrok tunnel + Puppeteer + Node/Express MalSrv + evilGet()
+                   override via reflected XSS                 (Catalano 2025)
+  I marker sono estratti da campi OPZIONALI del payload (pageUrl, referrer,
+  title, wsEndpoints, credentialsGetNative, iframeCount) e diventano
+  confirmed_signals a tutti gli effetti. Gli stessi label sono poi presenti
+  in policy.CRITICAL_BLOCK / main._fast_rules per forzare BLOCK.
 """
 
 import hashlib
+import re
 import statistics
 
 
 # Piattaforme mobile che legittimamente non hanno plugin
 _MOBILE_PLATFORMS = {"iphone", "ipad", "android", "ipod"}
 _MOBILE_UA_TOKENS = ("iphone", "ipad", "android", "mobile")
+
+# ── BitM infrastructure markers ───────────────────────────────────────────────
+# Tunnel HTTPS verso localhost comunemente usati per esporre il BE BitM+
+# (Catalano 2025 usa esplicitamente ngrok; trycloudflare/localtunnel sono
+# sostituti funzionali noti e adottati in PoC pubbliche).
+_TUNNEL_HOST_RE = re.compile(
+    r"(?:^|[./@])("
+    r"[a-z0-9-]+\.ngrok(?:-free)?\.(?:io|app|dev)"
+    r"|[a-z0-9-]+\.trycloudflare\.com"
+    r"|[a-z0-9-]+\.loca\.lt"
+    r"|[a-z0-9-]+\.localtunnel\.me"
+    r"|[a-z0-9-]+\.serveo\.net"
+    r")", re.IGNORECASE,
+)
+
+# Marker nel document.title: i due client BitM più diffusi lasciano il proprio
+# nome nel titolo quando non personalizzati (noVNC: "<sito> - noVNC";
+# Guacamole: contiene "Apache Guacamole").
+_NOVNC_TITLE_RE     = re.compile(r"\b(?:noVNC|Websockify|WebSockify)\b", re.IGNORECASE)
+_GUACAMOLE_TITLE_RE = re.compile(r"\bguacamole\b", re.IGNORECASE)
+
+# xURL di BitM+: il payload XSS viene iniettato come query-string del RP
+# (es.  "?xssParam={loadFromAttacker(/xss/payload.js)}" in Catalano 2025).
+_XSS_PAYLOAD_RE = re.compile(
+    r"(?:<\s*script|onerror\s*=|javascript:|document\.createElement|"
+    r"appendChild|loadFromAttacker|eval\s*\(|fromCharCode)",
+    re.IGNORECASE,
+)
+
+# UA / marker che rivelano il framework BitM lato client (alcune PoC non
+# riscrivono l'UA del viewer interno → il fingerprint trapela).
+_BITM_UA_MARKERS = ("novnc", "websockify", "guacamole", "tigervnc")
+
+# Porte di ascolto del BE BitM+ (3081=MalSrv Express, 6080=noVNC, 5900=VNC,
+# 4822=Guacamole Tomcat). Se compaiono nell'URL visto dal client è
+# altamente sospetto.
+_BITM_PORT_RE = re.compile(r":(?:3081|6080|5900|4822|8080)(?:/|$)")
 
 
 def extract_features(raw: dict, ip: str, store: dict,
@@ -39,10 +84,11 @@ def extract_features(raw: dict, ip: str, store: dict,
     canvas_hash = hashlib.md5(canvas_raw.encode()).hexdigest()[:12] if canvas_raw else "empty"
 
     headless_signals = _detect_headless(raw, ua_lower, plugins, platform, is_mobile)
+    bitm_signals     = _detect_bitm(raw, ua_lower)
 
     # Punteggio deterministico pre-LLM (usato nel prompt come base)
-    pre_score, confirmed = _pre_score(raw, headless_signals, timings_pos,
-                                      avg_timing, ip_meta)
+    pre_score, confirmed = _pre_score(raw, headless_signals, bitm_signals,
+                                      timings_pos, avg_timing, ip_meta)
 
     return {
         # Identità
@@ -78,6 +124,7 @@ def extract_features(raw: dict, ip: str, store: dict,
         # Segnali
         "headless_signals": headless_signals,
         "headless_score":   len(headless_signals),
+        "bitm_signals":     bitm_signals,   # segnali specifici BitM/BitM+
         "confirmed_signals": confirmed,     # segnali certi da mostrare all'LLM
         "pre_risk_score":   round(pre_score, 3),  # score deterministico base
         # IP metadata risolti automaticamente dal GeoIP resolver
@@ -139,7 +186,97 @@ def _detect_headless(raw: dict, ua_lower: str,
     return signals
 
 
-def _pre_score(raw: dict, headless_signals: list,
+def _detect_bitm(raw: dict, ua_lower: str) -> list[str]:
+    """
+    Rileva gli artefatti degli stack BitM e BitM+ documentati.
+
+    Legge campi OPZIONALI del payload (il collector client può fornirli o no):
+      - pageUrl / url          → window.location.href
+      - referrer               → document.referrer
+      - title / windowTitle    → document.title
+      - wsEndpoints            → URL dei WebSocket aperti (lista)
+      - credentialsGetNative   → bool: navigator.credentials.get.toString() == "[native code]"
+      - iframeCount            → numero di iframe nella pagina
+      - documentDomain         → document.domain
+
+    Tutti i campi sono trattati come hint: se assenti non contribuiscono
+    al risultato. Le firme e il razionale sono documentati nella docstring
+    di modulo.
+    """
+    signals: list[str] = []
+
+    page_url    = (raw.get("pageUrl") or raw.get("url") or "") or ""
+    referrer    = raw.get("referrer") or ""
+    title       = raw.get("title") or raw.get("windowTitle") or ""
+    ws_list     = raw.get("wsEndpoints") or []
+    iframe_n    = raw.get("iframeCount") or 0
+    credget_nat = raw.get("credentialsGetNative")
+
+    haystack = f"{page_url}\n{referrer}".lower()
+
+    # Tunneling HTTPS verso un backend locale: tipico vettore di BitM+
+    # per esporre la pagina d'attacco con certificato valido (requisito
+    # WebAuthn). Su produzione non dovrebbe mai comparire un origin ngrok.
+    if _TUNNEL_HOST_RE.search(page_url) or _TUNNEL_HOST_RE.search(referrer):
+        signals.append("tunnel_host")
+
+    # Porte tipiche del BE BitM+: 3081 (Express MalSrv), 6080 (noVNC),
+    # 4822 (Guacamole Tomcat), 5900 (VNC). Se arrivano al client → BLOCK.
+    if _BITM_PORT_RE.search(page_url) or _BITM_PORT_RE.search(referrer):
+        signals.append("bitm_backend_port")
+
+    # noVNC e Guacamole lasciano il loro nome nel document.title se non
+    # stato rimosso dall'attaccante (Tzschoppe 2023 §4.1–4.2).
+    if title and _NOVNC_TITLE_RE.search(title):
+        signals.append("novnc_client_marker")
+    if title and _GUACAMOLE_TITLE_RE.search(title):
+        signals.append("guacamole_client_marker")
+
+    # xURL con payload XSS riflesso (Catalano 2025 Fig. 11): firma tipica
+    # "?xssParam={loadFromAttacker(...)}", script tag, onerror, eval, ecc.
+    if _XSS_PAYLOAD_RE.search(page_url) or _XSS_PAYLOAD_RE.search(referrer):
+        signals.append("xss_reflected_param")
+
+    # Il client BitM usa WebSocket per trasportare RFB su HTTPS; se il
+    # collector riporta endpoint WS esterni al dominio pagina è sospetto.
+    for ws in ws_list or []:
+        if not isinstance(ws, str):
+            continue
+        ws_l = ws.lower()
+        if _TUNNEL_HOST_RE.search(ws_l) or _BITM_PORT_RE.search(ws_l):
+            signals.append("bitm_websocket_transport")
+            break
+        if ws_l.startswith(("ws://", "wss://")) and ("websockify" in ws_l
+                                                     or "/vnc" in ws_l
+                                                     or "/guacamole" in ws_l):
+            signals.append("bitm_websocket_transport")
+            break
+
+    # Override di navigator.credentials.get(): core di BitM+ (evilGet).
+    # Il collector può verificare `navigator.credentials.get.toString()`
+    # e segnalare se non è "[native code]".
+    if credget_nat is False:
+        signals.append("webauthn_api_override")
+
+    # UA che rivela il framework (PoC non-stealth / operatore distratto).
+    for marker in _BITM_UA_MARKERS:
+        if marker in ua_lower:
+            signals.append("bitm_framework_ua")
+            break
+
+    # Iframe overlay: BitM+ in Scenario 3 inietta un iframe che copre il
+    # viewport per mostrare la GUI del BitM sopra il RP. Molti iframe full
+    # sono anomali nelle pagine d'autenticazione reali.
+    try:
+        if int(iframe_n) >= 3:
+            signals.append("iframe_overlay")
+    except (TypeError, ValueError):
+        pass
+
+    return signals
+
+
+def _pre_score(raw: dict, headless_signals: list, bitm_signals: list,
                timings_pos: list, avg_timing: float,
                ip_meta: dict | None = None) -> tuple[float, list]:
     """
@@ -150,9 +287,10 @@ def _pre_score(raw: dict, headless_signals: list,
     confirmed = []
     ip_meta = ip_meta or {}
 
-    signal_set = set(headless_signals)
+    signal_set = set(headless_signals) | set(bitm_signals)
 
     weights = {
+        # Headless / automation
         "headlesschrome_ua": 0.50,
         "phantomjs_ua":      0.55,
         "webdriver_true":    0.45,
@@ -163,6 +301,20 @@ def _pre_score(raw: dict, headless_signals: list,
         "no_languages":      0.15,
         "no_timezone":       0.10,
         "suspicious_resolution": 0.10,
+        # BitM / BitM+ — pesi scelti per superare da soli la soglia BLOCK
+        # del contesto più permissivo (default=0.75) quando il segnale è
+        # intrinsecamente diagnostico (marker client, porta BE), e per
+        # restare sotto quando serve coincidenza con un contesto sensibile
+        # (tunnel_host, iframe_overlay).
+        "novnc_client_marker":     0.80,
+        "guacamole_client_marker": 0.80,
+        "bitm_framework_ua":       0.80,
+        "bitm_backend_port":       0.78,
+        "xss_reflected_param":     0.70,
+        "webauthn_api_override":   0.70,
+        "bitm_websocket_transport": 0.55,
+        "tunnel_host":             0.25,
+        "iframe_overlay":          0.15,
     }
 
     for sig, w in weights.items():
