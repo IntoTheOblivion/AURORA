@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>BitM Plugin — Dashboard real-time</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; padding: 1.5rem; }
+  h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 0.25rem; }
+  .sub { font-size: 0.85rem; color: #666; margin-bottom: 1rem; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #c62828; }
+  .dot.on { background: #2e7d32; }
+  .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .card h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: #333; display:flex; justify-content:space-between; align-items:center; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+  .stat { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 0.75rem 1rem; }
+  .stat .lbl { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat .val { font-size: 1.6rem; font-weight: 600; font-family: monospace; }
+  .stat.allow     .val { color: #2e7d32; }
+  .stat.challenge .val { color: #f57f17; }
+  .stat.block     .val { color: #c62828; }
+  button { background: #1a73e8; color: #fff; border: none; border-radius: 6px; padding: 0.45rem 1rem; font-size: 0.82rem; cursor: pointer; }
+  button:hover { background: #1557b0; }
+  button.sec { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
+  button.sec:hover { background: #f0f6ff; }
+  #chart-wrap { position: relative; height: 220px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+  th { background: #fafafa; color: #666; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px; position: sticky; top: 0; }
+  td.mono { font-family: monospace; font-size: 0.75rem; }
+  td.ts { white-space: nowrap; color: #666; }
+  .tag { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+  .tag.allow     { background: #e8f5e9; color: #2e7d32; }
+  .tag.challenge { background: #fff8e1; color: #f57f17; }
+  .tag.block     { background: #ffebee; color: #c62828; }
+  #feed-wrap { max-height: 380px; overflow-y: auto; }
+  .actions { display: flex; gap: 8px; }
+  .muted { color: #888; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+
+<h1>BitM Detection Plugin — Dashboard real-time</h1>
+<div class="sub">
+  <span class="status"><span class="dot" id="ws-dot"></span><span id="ws-label">disconnesso</span></span>
+  &nbsp;·&nbsp; eventi ricevuti: <span id="total-count">0</span>
+</div>
+
+<div class="stats">
+  <div class="stat allow"><div class="lbl">Allow</div><div class="val" id="c-allow">0</div></div>
+  <div class="stat challenge"><div class="lbl">Challenge</div><div class="val" id="c-challenge">0</div></div>
+  <div class="stat block"><div class="lbl">Block</div><div class="val" id="c-block">0</div></div>
+  <div class="stat"><div class="lbl">RPS (10s)</div><div class="val" id="c-rps">0</div></div>
+</div>
+
+<div class="card">
+  <h2>Richieste al secondo
+    <span class="muted">finestra 60s · risoluzione 1s</span>
+  </h2>
+  <div id="chart-wrap"><canvas id="chart"></canvas></div>
+</div>
+
+<div class="card">
+  <h2>
+    Feed eventi <span class="muted">(ultimi <span id="feed-count">0</span>)</span>
+    <span class="actions">
+      <button class="sec" id="btn-pause">Pausa</button>
+      <button class="sec" id="btn-clear">Svuota</button>
+      <button id="btn-export">Esporta CSV</button>
+    </span>
+  </h2>
+  <div id="feed-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th><th>IP</th><th>Sessione</th><th>Azione</th>
+          <th>Score</th><th>Verdict</th><th>Contesto</th><th>Indicatori</th>
+        </tr>
+      </thead>
+      <tbody id="feed"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── Stato ────────────────────────────────────────────────────────────────────
+const MAX_ROWS    = 500;      // righe mantenute nella tabella
+const BUCKET_SIZE = 60;       // secondi visualizzati nel grafico
+const events = [];            // eventi grezzi (append-only, cap MAX_ROWS)
+let paused   = false;
+let totalReceived = 0;
+const counters = { allow: 0, challenge: 0, block: 0 };
+
+// ── Chart.js: richieste/sec ultimi 60s ──────────────────────────────────────
+const labels  = Array.from({ length: BUCKET_SIZE }, (_, i) => `${-(BUCKET_SIZE - 1 - i)}s`);
+const dataset = (name, color) => ({
+  label: name, data: Array(BUCKET_SIZE).fill(0),
+  borderColor: color, backgroundColor: color + "33",
+  tension: 0.3, borderWidth: 2, pointRadius: 0, fill: true,
+});
+const chart = new Chart(document.getElementById("chart"), {
+  type: "line",
+  data: { labels, datasets: [
+    dataset("allow",     "#2e7d32"),
+    dataset("challenge", "#f57f17"),
+    dataset("block",     "#c62828"),
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    plugins: { legend: { position: "bottom", labels: { boxWidth: 12 } } },
+  },
+});
+
+// Bucket dell'ultimo secondo corrente (dove accumuliamo gli hit in arrivo)
+let currentBucket = { allow: 0, challenge: 0, block: 0 };
+
+// Ogni secondo pushiamo il bucket corrente sul grafico
+setInterval(() => {
+  chart.data.datasets[0].data.push(currentBucket.allow);
+  chart.data.datasets[1].data.push(currentBucket.challenge);
+  chart.data.datasets[2].data.push(currentBucket.block);
+  chart.data.datasets.forEach(d => { if (d.data.length > BUCKET_SIZE) d.data.shift(); });
+  chart.update("none");
+
+  const last10 = chart.data.datasets
+    .flatMap(d => d.data.slice(-10))
+    .reduce((a, b) => a + b, 0);
+  document.getElementById("c-rps").textContent = (last10 / 10).toFixed(1);
+
+  currentBucket = { allow: 0, challenge: 0, block: 0 };
+}, 1000);
+
+// ── Rendering tabella ───────────────────────────────────────────────────────
+const feed      = document.getElementById("feed");
+const feedCount = document.getElementById("feed-count");
+
+function renderRow(e, prepend = true) {
+  const tr = document.createElement("tr");
+  const ts = (e.ts || "").replace("T", " ").replace("Z", "").slice(0, 19);
+  const inds = (e.indicators || []).slice(0, 4).join(", ");
+  tr.innerHTML = `
+    <td class="ts">${ts}</td>
+    <td class="mono">${escapeHtml(e.ip || "")}</td>
+    <td class="mono">${escapeHtml((e.session || "").slice(0, 16))}</td>
+    <td><span class="tag ${e.action}">${e.action || ""}</span></td>
+    <td class="mono">${(e.score ?? 0).toFixed(3)}</td>
+    <td>${escapeHtml(e.verdict || "")}</td>
+    <td>${escapeHtml(e.context || "")}</td>
+    <td class="muted">${escapeHtml(inds)}</td>
+  `;
+  if (prepend) feed.insertBefore(tr, feed.firstChild);
+  else feed.appendChild(tr);
+  while (feed.rows.length > MAX_ROWS) feed.deleteRow(-1);
+  feedCount.textContent = events.length;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ── Ingest evento ────────────────────────────────────────────────────────────
+function ingest(e, fromBacklog = false) {
+  events.unshift(e);
+  while (events.length > MAX_ROWS) events.pop();
+
+  totalReceived++;
+  document.getElementById("total-count").textContent = totalReceived;
+
+  const act = e.action;
+  if (act in counters) {
+    counters[act]++;
+    document.getElementById("c-" + act).textContent = counters[act];
+    currentBucket[act]++;
+  }
+
+  if (!paused) renderRow(e, true);
+}
+
+// ── WebSocket ────────────────────────────────────────────────────────────────
+const dot   = document.getElementById("ws-dot");
+const label = document.getElementById("ws-label");
+let ws = null;
+let retry = 1000;
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws/events`);
+
+  ws.onopen = () => {
+    dot.classList.add("on");
+    label.textContent = "connesso";
+    retry = 1000;
+  };
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === "backlog") {
+      (msg.events || []).forEach(e => ingest(e, true));
+    } else if (msg.type === "event") {
+      ingest(msg.event);
+    }
+  };
+  ws.onclose = () => {
+    dot.classList.remove("on");
+    label.textContent = "disconnesso (retry…)";
+    setTimeout(connect, retry);
+    retry = Math.min(retry * 2, 10000);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+}
+connect();
+
+// ── Controlli ────────────────────────────────────────────────────────────────
+document.getElementById("btn-pause").onclick = (ev) => {
+  paused = !paused;
+  ev.target.textContent = paused ? "Riprendi" : "Pausa";
+};
+
+document.getElementById("btn-clear").onclick = () => {
+  events.length = 0;
+  feed.innerHTML = "";
+  feedCount.textContent = 0;
+};
+
+document.getElementById("btn-export").onclick = () => {
+  if (!events.length) { alert("Nessun evento da esportare."); return; }
+  const cols = ["ts","ip","session","action","context","score","pre_score",
+                "verdict","confidence","indicators","explanation","from_cache",
+                "latency_ms","browser","os","is_mobile","headless_n","ua"];
+  const esc  = v => {
+    if (v === null || v === undefined) return "";
+    const s = Array.isArray(v) ? v.join("|") : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  const rows = [cols.join(",")];
+  // Esportiamo in ordine cronologico (più vecchi prima)
+  events.slice().reverse().forEach(e => {
+    rows.push(cols.map(c => esc(e[c])).join(","));
+  });
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  a.href = url;
+  a.download = `bitm-events-${stamp}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>

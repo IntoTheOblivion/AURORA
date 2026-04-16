@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(docker --version)",
+      "Bash(redis-server --version)",
+      "Bash(netstat -ano)",
+      "Bash(powershell *)"
+    ]
+  }
+}

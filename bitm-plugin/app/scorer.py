@@ -29,33 +29,31 @@ _score_cache: dict       = {}
 _selected_model: str | None = None   # usato solo dal backend Anthropic
 
 # ── System prompt comune ─────────────────────────────────────────────────────
-# Llama3.1 tende a "chiacchierare" prima del JSON, quindi forziamo il formato
-# con istruzioni molto esplicite e un esempio concreto.
+# v7.0 — versione compatta (~40% più corta della v6) per ridurre la latenza
+# d'inferenza ed i token in input della cache prompt. Rimosse ridondanze
+# ("NON scrivere", "ISTRUZIONE CRITICA", esempio completo) mantenendo le
+# direttive essenziali:
+#   1) output JSON puro (niente markdown / testo fuori dal JSON)
+#   2) schema con enum espliciti per verdict/confidence
+#   3) mappatura soglie → verdict (coerenza enforce-ata da _validate_result)
+#   4) vincolo di "floor" sul pre_risk_score (coerente con policy.decide)
+# La lunghezza ridotta è validata dal test S01 (health) + test_report LLM.
 SYSTEM_PROMPT = """\
-Sei un sistema di sicurezza informatica specializzato nel rilevamento di attacchi \
-Browser-in-the-Middle (BitM). Analizzi le features di sessioni web.
+Rilevi attacchi Browser-in-the-Middle (BitM) analizzando le feature di una \
+sessione web.
 
-ISTRUZIONE CRITICA: rispondi SOLO con un oggetto JSON su una singola riga.
-NON scrivere testo prima o dopo il JSON. NON usare markdown o backtick.
-NON spiegare il ragionamento fuori dal campo "explanation".
+Rispondi SOLO con un oggetto JSON su una singola riga. Nessun testo, commento \
+o markdown fuori dal JSON.
 
-Schema ESATTO (copia questo formato):
-{"risk_score":0.05,"verdict":"LEGITIMATE","confidence":"high","indicators":[],"explanation":"browser reale, nessun segnale sospetto"}
+Schema ESATTO:
+{"risk_score":<float 0-1>,"verdict":"LEGITIMATE"|"SUSPICIOUS"|"ATTACK","confidence":"low"|"medium"|"high","indicators":[<str>],"explanation":"<=120 char"}
 
-Valori ammessi:
-- risk_score: float da 0.0 a 1.0
-- verdict: esattamente "LEGITIMATE" oppure "SUSPICIOUS" oppure "ATTACK"
-- confidence: esattamente "low" oppure "medium" oppure "high"
-- indicators: lista di stringhe (può essere vuota [])
-- explanation: stringa breve (max 120 caratteri)
+Soglie risk_score → verdict:
+ 0.00-0.30 → LEGITIMATE (browser reale)
+ 0.31-0.64 → SUSPICIOUS (segnali ambigui)
+ 0.65-1.00 → ATTACK (automazione/proxy/headless)
 
-Soglie:
-- 0.00-0.30 → LEGITIMATE (browser reale, comportamento normale)
-- 0.31-0.64 → SUSPICIOUS (segnali ambigui, richiedere verifica)
-- 0.65-1.00 → ATTACK (automazione, proxy, browser headless)
-
-Regola: se pre_risk_score >= 0.65 con segnali confermati credibili,
-NON scendere sotto 0.65 senza motivazione esplicita nell'explanation."""
+Vincolo: se pre_risk_score>=0.65 con segnali confermati, non scendere sotto 0.65."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,6 +63,8 @@ NON scendere sotto 0.65 senza motivazione esplicita nell'explanation."""
 def get_selected_model() -> str:
     if LLM_BACKEND == "ollama":
         return f"ollama/{OLLAMA_MODEL}"
+    if LLM_BACKEND == "stub":
+        return "stub/deterministic"
     return _selected_model or "anthropic/?"
 
 
@@ -420,20 +420,55 @@ async def _score_ollama(features: dict) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Backend stub (deterministico) — usato in CI / E2E / dev senza LLM reale.
+# Non fa rete, deriva score e verdict dai segnali già calcolati da extractor.
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _score_stub(features: dict) -> dict:
+    pre = float(features.get("pre_risk_score", 0.0))
+    confirmed = list(features.get("confirmed_signals") or [])
+    headless_sig = list(features.get("headless_signals") or [])
+
+    # Se ci sono segnali confermati ma pre_score è basso, alza a soglia sospetta
+    score = pre
+    if confirmed and score < 0.5:
+        score = 0.5
+    if headless_sig and score < 0.65:
+        score = 0.65
+
+    if score >= 0.65:
+        verdict = "ATTACK"
+    elif score >= 0.31:
+        verdict = "SUSPICIOUS"
+    else:
+        verdict = "LEGITIMATE"
+
+    return {
+        "risk_score":  round(min(1.0, max(0.0, score)), 3),
+        "verdict":     verdict,
+        "confidence":  "high" if confirmed or headless_sig else "low",
+        "indicators":  (confirmed + headless_sig)[:6],
+        "explanation": "stub scorer deterministico (pre_risk_score + segnali)",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry point pubblico
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def score_session(features: dict) -> dict:
     """
     Punto di ingresso unico per lo scoring LLM.
-    Seleziona automaticamente Anthropic o Ollama in base a LLM_BACKEND.
+    Seleziona automaticamente Anthropic / Ollama / stub in base a LLM_BACKEND.
     """
     cache_key = f"{features.get('canvas_hash','x')}:{features.get('user_agent','')[:60]}"
     cached = _cache_get(cache_key)
     if cached:
         return {**cached, "_from_cache": True}
 
-    if LLM_BACKEND == "ollama":
+    if LLM_BACKEND == "stub":
+        result = await _score_stub(features)
+    elif LLM_BACKEND == "ollama":
         result = await _score_ollama(features)
     else:
         result = await _score_anthropic(features)

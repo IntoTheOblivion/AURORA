@@ -17,7 +17,7 @@ _B  = "\033[1m"
 
 def log_event(ip: str, sid: str, features: dict,
               result: dict, action, elapsed_ms: float,
-              context: str = "default") -> None:
+              context: str = "default") -> dict:
 
     av     = action.value
     color  = _C.get(av, "")
@@ -64,3 +64,5 @@ def log_event(ip: str, sid: str, features: dict,
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError:
         pass
+
+    return entry

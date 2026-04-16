@@ -1,0 +1,311 @@
+{
+  "version": "7.1",
+  "timestamp": "2026-04-16T17:34:18.970219+00:00",
+  "headless": true,
+  "scenarios": 7,
+  "min_detection_threshold": 0.9,
+  "total": 15,
+  "detected": 15,
+  "bypassed": 0,
+  "errors": 0,
+  "detection_rate": 1.0,
+  "bypass_rate": 0.0,
+  "results": [
+    {
+      "scenario_id": "A01",
+      "scenario_name": "Plain headless (baseline)",
+      "iteration": 0,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": true,
+      "action": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "headless_ua",
+        "webdriver_flag"
+      ],
+      "reason": "Segnale critico: headless_ua, headlesschrome_ua, webdriver_flag",
+      "total_ms": 578,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A01",
+      "scenario_name": "Plain headless (baseline)",
+      "iteration": 1,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": true,
+      "action": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "headless_ua",
+        "webdriver_flag"
+      ],
+      "reason": "Segnale critico: headless_ua, headlesschrome_ua, webdriver_flag",
+      "total_ms": 163,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A02",
+      "scenario_name": "UA rotation mid-session",
+      "iteration": 0,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Browser con segnali ambigui",
+      "total_ms": 2244,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A02",
+      "scenario_name": "UA rotation mid-session",
+      "iteration": 1,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.2; rv:121.0) Gecko/20100101 Firefox/12",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Ambigui segnali di browser potenzialmente automatizzato",
+      "total_ms": 2071,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A02",
+      "scenario_name": "UA rotation mid-session",
+      "iteration": 2,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Browser con segnali ambigui",
+      "total_ms": 172,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A03",
+      "scenario_name": "Fast input injection (sub-human 3ms)",
+      "iteration": 0,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Browser con segnali ambigui",
+      "total_ms": 171,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A03",
+      "scenario_name": "Fast input injection (sub-human 3ms)",
+      "iteration": 1,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Browser con segnali ambigui",
+      "total_ms": 174,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A04",
+      "scenario_name": "No static resources (images/css/fonts abortiti)",
+      "iteration": 0,
+      "target_page": "/payment",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=payment boost=0.19] Browser con segnali ambigui",
+      "total_ms": 175,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A04",
+      "scenario_name": "No static resources (images/css/fonts abortiti)",
+      "iteration": 1,
+      "target_page": "/payment",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=payment boost=0.19] Browser con segnali ambigui",
+      "total_ms": 169,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A05",
+      "scenario_name": "Stealth patches (webdriver+plugins+lang)",
+      "iteration": 0,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Browser con segnali ambigui",
+      "total_ms": 168,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A05",
+      "scenario_name": "Stealth patches (webdriver+plugins+lang)",
+      "iteration": 1,
+      "target_page": "/login",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.5,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "swiftshader_webgl",
+        "zero_plugins"
+      ],
+      "reason": "[ctx=login boost=0.19] Browser con segnali ambigui",
+      "total_ms": 167,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A06",
+      "scenario_name": "Stealth + canvas noise + WebGL spoof",
+      "iteration": 0,
+      "target_page": "/admin",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "challenge",
+      "score": 0.3,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [
+        "swiftshader_webgl"
+      ],
+      "reason": "[ctx=admin boost=0.10] Browser reale con segnali ambigui",
+      "total_ms": 1980,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A06",
+      "scenario_name": "Stealth + canvas noise + WebGL spoof",
+      "iteration": 1,
+      "target_page": "/admin",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "challenge",
+      "score": 0.3,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [
+        "swiftshader_webgl"
+      ],
+      "reason": "[ctx=admin boost=0.10] Browser reale con segnali ambigui",
+      "total_ms": 1836,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A07",
+      "scenario_name": "Tor exit node (ip_meta injection)",
+      "iteration": 0,
+      "target_page": "/checkout",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "tor_exit_node"
+      ],
+      "reason": "Segnale critico: tor_exit_node",
+      "total_ms": 166,
+      "http_err": null,
+      "exc": null
+    },
+    {
+      "scenario_id": "A07",
+      "scenario_name": "Tor exit node (ip_meta injection)",
+      "iteration": 1,
+      "target_page": "/checkout",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
+      "webdriver_fp": false,
+      "action": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "tor_exit_node"
+      ],
+      "reason": "Segnale critico: tor_exit_node",
+      "total_ms": 166,
+      "http_err": null,
+      "exc": null
+    }
+  ]
+}

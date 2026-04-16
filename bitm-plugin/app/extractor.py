@@ -1,10 +1,8 @@
 """
-Feature Extractor v4
-- Rimosso import re (inutilizzato)
-- Aggiunto campo is_mobile: Safari iOS/Android legittimamente non ha plugin
-- zero_plugins non viene segnalato per piattaforme mobile
-- Aggiunto campo pre_risk_score: punteggio deterministico pre-LLM
-- Aggiunto campo confirmed_signals: segnali certi da passare esplicitamente all'LLM
+Feature Extractor v6
+- ip_meta arriva come parametro esplicito dal GeoIP resolver
+  (più nessuna lettura diretta da raw["ip_meta"] come ground truth)
+- Tutti gli altri comportamenti v4/v5 invariati.
 """
 
 import hashlib
@@ -16,11 +14,13 @@ _MOBILE_PLATFORMS = {"iphone", "ipad", "android", "ipod"}
 _MOBILE_UA_TOKENS = ("iphone", "ipad", "android", "mobile")
 
 
-def extract_features(raw: dict, ip: str, store: dict) -> dict:
+def extract_features(raw: dict, ip: str, store: dict,
+                     ip_meta: dict | None = None) -> dict:
     ua = raw.get("userAgent", "") or ""
     ua_lower = ua.lower()
     plugins = raw.get("plugins") or []
     platform = raw.get("platform", "") or ""
+    ip_meta = ip_meta or {}
 
     # Determina se è un dispositivo mobile (Safari iOS non ha plugin — è normale)
     is_mobile = (
@@ -41,7 +41,8 @@ def extract_features(raw: dict, ip: str, store: dict) -> dict:
     headless_signals = _detect_headless(raw, ua_lower, plugins, platform, is_mobile)
 
     # Punteggio deterministico pre-LLM (usato nel prompt come base)
-    pre_score, confirmed = _pre_score(raw, headless_signals, timings_pos, avg_timing)
+    pre_score, confirmed = _pre_score(raw, headless_signals, timings_pos,
+                                      avg_timing, ip_meta)
 
     return {
         # Identità
@@ -79,8 +80,8 @@ def extract_features(raw: dict, ip: str, store: dict) -> dict:
         "headless_score":   len(headless_signals),
         "confirmed_signals": confirmed,     # segnali certi da mostrare all'LLM
         "pre_risk_score":   round(pre_score, 3),  # score deterministico base
-        # IP metadata (fornito dal client o da GeoIP esterno)
-        "ip_meta":          raw.get("ip_meta") or {},
+        # IP metadata risolti automaticamente dal GeoIP resolver
+        "ip_meta":          ip_meta,
     }
 
 
@@ -139,13 +140,15 @@ def _detect_headless(raw: dict, ua_lower: str,
 
 
 def _pre_score(raw: dict, headless_signals: list,
-               timings_pos: list, avg_timing: float) -> tuple[float, list]:
+               timings_pos: list, avg_timing: float,
+               ip_meta: dict | None = None) -> tuple[float, list]:
     """
     Calcola un punteggio deterministico base e una lista di segnali confermati.
     Questi vengono passati all'LLM come punto di partenza affidabile.
     """
     score = 0.0
     confirmed = []
+    ip_meta = ip_meta or {}
 
     signal_set = set(headless_signals)
 
@@ -178,8 +181,7 @@ def _pre_score(raw: dict, headless_signals: list,
         score += 0.09
         confirmed.append(f"elevated_latency_{int(avg_timing)}ms")
 
-    # VPN / Tor (se forniti)
-    ip_meta = raw.get("ip_meta") or {}
+    # VPN / Tor (risolti dal GeoIP)
     if ip_meta.get("is_tor"):
         score += 0.30
         confirmed.append("tor_exit_node")

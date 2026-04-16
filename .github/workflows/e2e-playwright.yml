@@ -1,0 +1,96 @@
+name: E2E Playwright (v7.1)
+
+on:
+  push:
+    branches: [master, test]
+    paths:
+      - 'bitm-plugin/**'
+      - '.github/workflows/e2e-playwright.yml'
+  pull_request:
+    paths:
+      - 'bitm-plugin/**'
+      - '.github/workflows/e2e-playwright.yml'
+  workflow_dispatch:
+    inputs:
+      min_detection:
+        description: 'Detection rate minima (0.0-1.0)'
+        required: false
+        default: '0.90'
+
+jobs:
+  e2e:
+    name: BitM evasion E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Stub scorer: CI senza dipendenze esterne (Anthropic/Ollama).
+      # Per usare un LLM reale: impostare il secret ANTHROPIC_API_KEY e
+      # cambiare LLM_BACKEND in anthropic + aggiungere la env dal secret.
+      LLM_BACKEND: stub
+      PORT: 8000
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install BitM runtime deps
+        working-directory: bitm-plugin
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install E2E deps
+        working-directory: bitm-plugin
+        run: pip install -r tests/e2e_playwright/requirements-e2e.txt
+
+      - name: Install Playwright browsers
+        run: python -m playwright install --with-deps chromium
+
+      - name: Start BitM API (background)
+        working-directory: bitm-plugin
+        run: |
+          nohup python run.py > api.log 2>&1 &
+          echo $! > api.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:${PORT}/health >/dev/null; then
+              echo "API ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::BitM API failed to start"
+          tail -n 80 api.log
+          exit 1
+
+      - name: Run E2E Playwright suite
+        working-directory: bitm-plugin
+        run: |
+          python tests/e2e_playwright/run_e2e.py \
+            --url "http://localhost:${PORT}" \
+            --min-detection "${{ github.event.inputs.min_detection || '0.90' }}" \
+            --report tests/e2e_playwright/e2e_report.json
+
+      - name: Upload E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-v7.1
+          path: |
+            bitm-plugin/tests/e2e_playwright/e2e_report.json
+            bitm-plugin/api.log
+          if-no-files-found: warn
+
+      - name: Stop BitM API
+        if: always()
+        working-directory: bitm-plugin
+        run: |
+          if [ -f api.pid ]; then
+            kill "$(cat api.pid)" 2>/dev/null || true
+          fi
