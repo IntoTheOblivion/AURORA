@@ -1,0 +1,1461 @@
+Journal of Computer Virology and Hacking Techniques (2025) 21:11
+https://doi.org/10.1007/s11416-025-00556-2
+
+ RESEARCH
+
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle
+and reflected cross site scripting
+
+Christian Catalano1 · Andrea Chezzi2 · Vita Santa Barletta1 · Franco Tommasi2
+
+Received: 12 November 2024 / Accepted: 16 April 2025 / Published online: 14 May 2025
+© The Author(s) 2025
+
+Abstract
+In our modern digital landscape, web browsers play a crucial role as gateways to large amounts of information and services.
+However, recent developments have demonstrated that the very features that make browsing convenient and seamless can be
+exploited by malicious actors through a potent threat vector known as the "Browser-in-the-Middle" (BitM) attack. Most of
+the Multi-Factor Authen- tication (MFA) security measures are shown to be ineffective to prevent BitM attacks. However,
+the FIDO2 Project that includes CTAP2 protocol that works together with the Web Authentication API (WebAuthn API) has
+been proven to be a virtually unattackable MFA method by current state-of-the-art BitM implementations. At least until now.
+This work expands the range of applica- ble scenarios where BitM attack can be used by taking its technical architecture
+a step further: we show how the effectiveness of BitM--used along a Reflected XSS vulnerability exploitation--can be
+improved resulting in the novel BitM + attack that proves to be capable of defeating any available MFA method includ-
+ing FIDO2/WebAuthn solutions that rely on hardware dongles and represent the only method of authentication that went
+undefeated by virtually any phishing attack approach to date.
+
+Keywords Browser in the middle (BitM) · FIDO alliance · FIDO2 project · U2F · CTAP/CTAP2 · Web authentication
+(WebAuthn) · Multi-factor authentication (MFA) · Real-time phishing · Man-in-the-browser (MitB) · Cross-site scripting
+(XSS) · Malware · Malicious browser extensions · Man-in-the-middle (MitM)
+
+1 Introduction                                                    is currently analyzed by cybersecurity professionals in all of
+                                                                  its malware variants and data breach techniques. The attacker
+As highlighted by several published reports [1] on cyberse-       that uses this kind of attack attempts to obtain sensitive infor-
+curity one of the most widely used techniques to perpetrate       mation from a potential victim while he or she is interacting
+cyber attacks is phishing [2], and one of the most effec- tive    with a website or application. This technique is particularly
+variants of this type of attack is real-time phishing based most  dangerous because the attacker can manipulate web pages or
+often on the attack pattern called Man in the Browser (MitB)      applications on the go to make them more convincing and
+[3].                                                              better deceive the victim.
+
+   Real-time phishing perpetrated through the MitB tech-             In this kind of phishing attack, the attacker might manip-
+nique is a research topic of academic interest [3, 4] and it      ulate a web page that appears to belong to a legitimate
+                                                                  company, such as a banking institution, and then invite the
+B Christian Catalano                                              victims to enter their personal or financial information by act-
+                                                                  ing out many of the multi factor authentication mechanisms.
+     christian.catalano@uniba.it                                  Such information can then be used to steal money or perform
+                                                                  fraudulent activities.
+     Andrea Chezzi
+     andrea.chezzi@unisalento.it                                     To protect against this type of attack, several defense
+                                                                  mechanisms have been pro- posed over time [5] and their
+     Vita Santa Barletta                                          effectiveness and limitations have been carefully examined
+     vita.barletta@uniba.it                                       in literature. FIDO2 Project's CTAP2 (Client to Authentica-
+                                                                  tor Protocol) along with the Web Authentication (WebAuthn)
+     Franco Tommasi                                               standard published by W3C stands as one of the latest
+     francesco.tommasi@unisalento.it
+
+1 University of Bari Aldo Moro, Bari, Italy
+2 University of Salento, Lecce, Italy
+
+                                                                  123
+11 Page 2 of 26                                                  C. Catalano et al.
+
+and most commonly used strong authentication mechanisms          Fig. 1 Some examples of commercially available hardware authentica-
+designed to mitigate phishing in real-time on the Web.           tors produced by Yubico [16] working with FIDO2 Project's protocols
+                                                                 and WebAuthn standards
+   FIDO2 [6] is designed to mitigate a range of modern cyber-
+attacks. In particular, it is claimed to be resistant to data    most interesting proposals to mitigate this typol- ogy of
+breaches as servers store only public keys, and to phishing      attacks is definitely the adoption of FIDO2 protocols based
+combined with Adversary-in-the-Middle because the domain         on the passwordless concept [11]. FIDO2 stands out as a con-
+is verified for each authentication. Notably, these two attacks  temporary, open-source authentication proto- col that enjoys
+were identified as the top cyber crimes in the Microsoft's       substantial backing from major technology companies (e.g.,
+2022 Report [7]. FIDO2 propose itself as a paradigm shift        Microsoft, Google, Facebook, Apple, etc.).
+for commonly used authentication: prior to FIDO2, pass-
+wordless authentication was primarily employed in highly            FIDO2 Project is developed by the Fast Identity Online
+secure environments, such as smart cards in government           (FIDO) Alliance [6, 12], an industry consortium composed
+agencies and financial institutions [8]. With FIDO2, the iden-   of technology companies and other service providers. The
+tity community pushes towards a complete transition from         alliance includes 42 members including Amazon, Apple,
+the "something you know" into "something you own" (the           Arm, Google, Microsoft, PayPal, as well as financial compa-
+possession factor) for a growing number of regular users         nies such as American Express, MasterCard, Visa, and Wells
+worldwide.                                                       Fargo.
+
+   After a close consideration of the newest web authentica-        The FIDO Alliance states that FIDO2 "reflects the indus-
+tion technologies available today this research work aims at     try's answer to the global password problem," addressing the
+presenting an improved version of Browser-in-the- Middle         challenges of traditional authentication in terms of security,
+(BitM) attack pattern which is specifically designed to inval-   usability, privacy and scalability. FIDO2 works alongside
+idate the protection provided by the FIDO2 project which         the WebAuthn API--designed and maintained by the World
+relies on a hardware authenticator directly connected to the     Wide Web Consortium (W3C [13, 14]).
+user's client machine in order to confirm user's identity.
+                                                                    - that are integrated into industry leader browsers,
+   Our case study focuses on attack scenarios where it is pos-   including Google Chrome and Microsoft Edge (based on
+sible to compromise web browsing security by using BitM          Chromium project [15]), Mozilla, and WebKit. Also, FIDO2
+and MitB techniques combined. MitB, in this research, is         is employed to safeguard critical targets from phishing
+carried through by assuming that an exploitable Reflected        attacks, including in Google Advanced Protection Pro-
+XSS vulner- ability can be found inside any web page under       gramme. Moreover adoption of FIDO2 is rapidly expanding,
+a legit target service domain. So, an XSS-vulnerable web-        propelled by the introduction of FIDO2-enabled passkeys
+site can be assumed as the target of the proposed real-time      integrated by Apple into their devices.
+phishing attack.
+                                                                    Consequently, it has established itself as one of the
+   To put it briefly, the core elements on which our proposed    most common standards for robust, modern authentication.
+attack relies are the BitM approach combined with the MitB       FIDO2 offers the versatility to function as an extra layer of
+technique. So, we will show the joint imple- mentation of the    security, such as alongside a password, or as a standalone
+two attacks can defeat FIDO2 and WebAuthn strong authen-         authentication mech- anism. In the latter scenario, FIDO2
+tication protocols besides the other security methods already    introduces a paradigm shift in authentication by eliminating
+shown to be vulnerable in the past works [9, 10]. After a brief  the "something you know" element, typically represented
+presentation of the related works we will proceed to describe    by a password, thereby achieving the goal of passwordless
+the background that will serve to better explain our attack      authentication.
+which is a contin- uation and improved expansion of the pre-
+vious works described in [9, 10]. In addition, the present          The FIDO2 protocol involves three main parties: the FIDO
+work demonstrates this technique can be applied to different     server (typically inte- grated with the Relying Party or sim-
+vectors, since it has been shown in related works that also      ply RP), the FIDO Client (usually a web browser), and the
+malicious browser extensions may be used.                        HW authenticator (for instance, as shown in the Fig. 1 a
+                                                                 USB hardware dongle). Communication among these enti-
+2 Background                                                     ties relies on two standard proto- cols: WebAuthn [14],
+                                                                 defining the interface between the client and server, and
+2.1 FIDO2 project and W3C WebAuthn API                           Client to.
+
+To protect against real-time phishing attacks, several defense
+mechanisms [5] have been proposed over time. One of the
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...      Page 3 of 26 11
+
+                                                                    data, such as fingerprint or voice), is used to sign transactions
+                                                                    initiated by a trusted party. Some solutions, ensure that pri-
+                                                                    vate keys are further protected in the hardware trust zones of
+                                                                    mobile devices, separate from the device's operating system.
+
+Fig. 2 Overview of FIDO2 mechanism working with WebAuthn API        2.2 Browser in the middle (BitM)
+[11]
+                                                                    The publication of the Browser in the Middle (BitM) attack
+   Authenticator Protocol (CTAP) [12] which provides                [9, 10] sparked some inter- est in cybersecurity circles [18,
+FIDO2-compatible devices with an interface to external              19] and the general press [20, 21]. Recently (January 2023)
+authenticators (via NFC, USB, Bluetooth, etc.).                     the BitM attack technique was recognized and included in the
+                                                                    Common Attack Pattern Enumeration and Classification cat-
+   Users can initiate two distinct FIDO2 procedures: reg-           alog (list Version 3.9 CAPEC ID-701) [22] of MITRE [23].
+istration and authentication. The first aims to generate            The idea behind the attack pattern is to interpose a transpar-
+cryptographic keys and associate them with the user's iden-         ent malicious browser (the Attacker) between the browser
+tity, while the latter serves to verify key possession. The         of the user (the Victim) and the server that delivers the web
+protocol flow follows a straightforward challenge-response          service (the Target, e.g. a banking web application, social
+sequence, as depicted in Fig. 2. The process starts with the        network, etc..) in order to intercept, record and manipulate
+user's request for authentication or registration (steps 1, 2).     any communication between the victim and the target of des-
+Then, the FIDO server generates a challenge and sends it to         tination. Underlying the attack is a complete reversal of the
+the authenticator (steps 3, 4). To get unlocked the authenti-       classic attack paradigm. In the classic case, the attacker aims
+cator requests a user presence or verification check (step 5).      to com- promise the security of a target system. Instead, in
+In the case of registration, a key pair is generated, and the       the new paradigm, the victim is lured to visit the attacker's
+public key is transmitted to the server. For both procedures,       system and induced to use it in the belief that it is the target.
+a digital signature is produced and transmitted to the server       It has also been shown that, when properly combined with
+(steps 6, 7). The process terminates with the server's veri-        other current tech- nologies, this technique can pose a seri-
+fication of the signature. The security of FIDO2 is heavily         ous threat in some of the current technological environments
+contingent on the type (platform or roaming) and the quality        in which we live and operate. In this regard, a variant of
+of authenticators employed. A platform authenticator (PA) is        the BitM attack called Persistent Mobile App-in-the-Middle
+an integral part of a device, like a feature of the client's oper-  (MAitM) has been described [10].
+ating system (e.g.: Windows, Android, Linux, macOS/iOS),
+while a roaming authenticator (RA) is a distinct device that           In the present research work, a new attack scenario that
+can be conveniently detached, for example, a USB hardware           combines BitM with MitB properties is conceived and ana-
+token. Authenticator vendors are required to employ widely          lyzed. To this end, a PoC will be provided demonstrat- ing
+recognized cryptographic primitives (e.g., ECDSA); how-             how the BitM technique can be used, when combined with
+ever, the security characteristics of their products may vary,      other vulnerabilities, to circumvent the most robust MFA
+including resistance to tampering. The core functions of an         authentication mechanism offered by the state of the art
+authenticator are to securely store private keys and to conduct     FIDO/CTAP2 [5, 6, 24]. The intent is to describe the attack
+cryptographic operations, such as signature generation.             techniques and to provide an opportunity for practitioners to
+                                                                    better understand the risk and mitigate the impact of such an
+   Briefly, FIDO's U2F/CTAP2 standard defines crypto-               attack.
+graphic challenge and response protocols in which a dongle
+with a private key can prove its identity to a pre-registered       2.3 Man in the browser (MitB)
+website. The dongle interacts with the user's device through
+a physical USB port or wirelessly (NFC, Bluetooth). Such            MitB is a type of cyberattack that targets web browsers and
+dongles are now produced by many companies, including               is characterized by the attacker's ability to intercept, mod-
+Yubico [16] and Feitian Technologies [17].                          ify, or manipulate data exchanged between a user and a web
+                                                                    application without the user's knowledge. The "man" in this
+   Ultimately, FIDO2 is considered the successor to the pre-        context refers to the attacker who takes control over the web
+vious authentication standards, FIDO UAF and FIDO U2F               browser.
+[5]. FIDO2-based solutions undergo rigorous certification to
+ensure that user credentials are decentralized, isolated and           Recent studies have shown that browser-based threats are
+encrypted on users' personal devices.                               evolving rapidly, exploit- ing not only user interaction but
+                                                                    also the computational resources of end-user devices. For
+   As already mentioned, the FIDO2 user's private key called        instance, in the MinerAlert framework proposed by Tommasi
+security key (which can also be generated from a biometric
+
+                                                                    123
+11 Page 4 of 26                                                    C. Catalano et al.
+
+et al. [25], the authors highlight how browser extensions and         It also turns out that not only the security of U2F protocols
+cryptojacking scripts can silently compromise a.                   can be broken, but, as a consequence, it will also be shown
+                                                                   that the newer FIDO/CTAP2 is vulnerable as well. Moreover
+   user's device to mine cryptocurrencies without consen-          the 2018 FIDO Security Reference document [29] admits
+t--demonstrating a real-world example of stealthy, persistent      that:"An attacker is able to obtain malicious execution in the
+threats that align with MitB tactics. Similarly, Tom- masi et al.  security context of the Relying Party client application (e.g.
+also discuss mobile session fixation attacks in micropayment       viaCross-Site Scripting (XSS)) or abuse the secure channel
+systems [26], which underline how attackers can hijack and         or session identifier after the user has successfully authenti-
+manipulate web sessions in environ- ments with limited vis-        cated. This is a client side attack. Consequences: The attacker
+ibility and user control. Both examples reinforce the notion       is able to control the users' session, violating Transaction
+that modern MitB attacks may take various forms, from finan-       Non-Repudiation."
+cial fraud to resource exploitation, and emphasize the urgent
+need for layered defenses in web environments. Man-in-                This means that the exploitation of XSS vulnerabilities
+the-Browser attacks are particularly stealthy and difficult to     exposed on client-side by the RP are a viable approach of
+detect because they occur within the user's browser, making        attack in order to defeat FIDO/CTAP2 with.
+it challenging for traditional security measures to identify the
+malicious activity. The attack typically begins with the com-         WebAuthn API protocol. In such scenario MitB would
+promise of a user's device through various means, such as          be conveniently perpetrated and implemented by using XSS
+malware or a phishing attack. Once the attacker gains con-         vulnerabilities exposed on client side.
+trol of the browser, they can eavesdrop on the user's activities,
+manipulate web pages, and alter information submitted by the          In summary, a Man-in-the-Browser attack is a sophisti-
+user. This can include stealing login credentials, credit card     cated threat where an attacker exploits vulnerabilities in a
+information, or other sensitive data. Attackers often mod-         user's browser to gain control over online activ- ities, inter-
+ify web content in real-time, such as altering the details of      cept sensitive data, and manipulate web transactions, all
+a finan- cial transaction or changing the recipient's account      while remaining hidden from the user's view. In addition,
+number. Malicious agents can use also Man-in-the-Browser           as it will be demonstrated, XSS can be used as MitB in tan-
+techniques to bypass two-factor authentication methods, as         dem with BitM attack to defeat even one of the most secure
+they have real-time access to the authentication process.          MFA methods currently available.
+These attacks can be persis- tent, meaning they can continue
+to intercept and manipulate data as long as the user's device      3 Related works
+remains compromised. In fact, most of the peculiarities of
+the MitB described.                                                Several works already have dealt with the new paradigm for
+                                                                   strong web authentication introduced by the FIDO2 Project.
+   above are intended to be leveraged to achieve the attack        Many of these works try to point out strengths but in partic-
+proposed in this paper.                                            ular weaknesses that this new standard brings to the user's
+                                                                   experience and his/her security. The drastic change in user's
+   Moreover defending against Man-in-the-Browser attacks           habits that FIDO2 introduces raises questions about its adap-
+often requires a combina- tion of security measures, includ-       tation and usability on a large scale. For instance a study by
+ing robust endpoint security, anti-malware software, and user      Lyastani et al. [30], involving 94 participants revealed that
+education to recognize and avoid phishing attacks, however         while FIDO2 passwordless authentication was well received,
+regardless of all the countermeasures that may be adopted the      concerns about usability, such as recovery from a lost authen-
+human factor is still the most crucial one in order to prevent     ticator, persisted. Similarly, Owens et al. [31] examined
+security breaches by MitB.                                         user perceptions of passwordless authentication using RAs
+                                                                   (Roaming Authenticators) and reported user concerns related
+   In G. Patat et al. [3] the following statement is reported      to availability, account recovery/backup, and setup difficul-
+about MitB and FIDO protocols:"[MitB] capability allows            ties.
+attackers to compromise the FIDO client. Thus, for instance,
+attackers might install malicious plugins/extensions or read          The research paper detailed in E. Ulqinaku et al. [4].
+browsers files, such as cookies [...] Thus, by one of the MitB,    analyzes the effectiveness of FIDO2 protocols in prevent-
+the MitM and the Intrusion capabilities, attackers are able to     ing real-time phishing attacks. In particular, it focuses on
+observe the exchanged data between the authenticator and           possible downgrade attacks against FIDO protocols, which
+the Relying Party: users' public key, their key handle, fresh      could circumvent their protections pushing the users by any
+session data (e.g. challenges) and valid signatures. In this       kind of social engineering trick to use a fall- back authenti-
+setting, the security of the U2F protocol is formally proven       cation option in order to get authenticated and gain access
+in A. Gonzalez et al. [27]and C. Jacomme et al. [28]even if        to restricted data and resources. All in all, in-depth analy-
+the attackers have access to these data."                          sis of vulnerabilities in FIDO proto- cols revealed that these
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...    Page 5 of 26 11
+
+standards may not be able to completely eliminate real-time       Fig. 3 Regular BitM design fails to phish FC2W authentication due to
+phishing attacks. In particular, attackers could use social       absence of a dedicated communication channel that supports WebAuthn
+engineering techniques to manipulate authentication mes-          API malicious data exchange between the user's browser and the BitM.
+sages sent between the user and the server, forcing the user      In fact the connection between user's browser and BitM provides to
+to provide their login credentials without being protected by     the victim no more than the real-time video feed of the target webpage
+FIDO2.                                                            and standard mouse/keyboard functionality for the I/O. Hence, FIDO
+                                                                  authenticator functionality, in this case, is out of reach of the BitM. [9]
+   A few researchers conducted several experiments to
+demonstrate the feasibility of these attacks [27, 28]. For        capability in case the authenticator dongle is used as the only
+example, they showed that it is possible to trick users into      method of access and it gets whatever lost or destroyed.
+providing their credentials through a counterfeit website
+using a combination of phishing techniques and manipula-             Chezzi et al. [33] present a variant of BitM + attack, using
+tion of authentication messages. In addition, the researchers     an approach based on malicious browser extensions instead
+examined several countermeasures to mitigate these attacks,       of XSS vulnerability exploitation.
+including the use of extended Secure Sockets Layer (SSL)
+certificates and the adoption of multi- factor authentication        In summary, the research so far suggests that although
+protocols. However, they concluded that these solutions may       FIDO protocols are useful in preventing phishing attacks,
+not be sufficient to completely prevent social engineering        they may not be sufficient to completely eliminate real-time
+downgrade attacks against FIDO protocols.                         phishing attacks. The researchers suggest further technologi-
+                                                                  cal and security developments to address this growing threat.
+   In [28] a valid formal analysis of multi-factor authenti-      On the other hand, the new attack proposed in this paper rep-
+cation protocols is conducted. It shows, by using formal and      resents a new example of what can be done in order to defeat
+consistent definitions and notations what kind of attacks may     such strong authentication mechanisms as FIDO2 Project.
+defeat different MFA protocols including FIDO/CTAP2. It
+also claims that it is possible to bypass FIDO/CTAP2 protec-      4 The idea behind the proof of concept
+tion in attack scenarios under certain condi- tions that involve
+malicious code to be run on the client machine. Instead, in       For simplicity sake, from now on, the authentication mecha-
+[27] the.                                                         nism known as "FIDO/C- TAP2 with WebAuthn API" might
+                                                                  be called just "FC2W".
+   authors analyze of the YubiKey dongle (produced by
+Yubico) and a specific version of the YubiHSM protocol.           4.1 Why regular BitM attack does not work
+However such analysis was conducted by focusing on the                with FC2W
+inner cryptographic specifications of the USB dongle that
+implements the FIDO2 Project authenticator hardware and           Before presenting the new attack, we start by acknowledg-
+not considering the possible security issues that may arise       ing why a regular BitM attack (as shown in the Fig. 3)
+with attacks aiming at other parts of the FIDO protocol such      is ineffective to defeat the strong authentication mecha-
+as the WebAuthn API, the browser involved in the authenti-        nism implemented with FC2W. To this purpose, we refer
+cation and the communication channels between server and          to Sect. 7.1 in F. Tommasi et al. [10] entitled "MAitM effec-
+clients ends crucial to get the authentication process working.   tiveness assessment" where the set of conditions required
+                                                                  by such kind of attacks to succeed (MAitM or equivalently
+   Papers from C. Catalano et al. [9, 10] showcase the            BitM) is discussed. Long story short, we can state that a BitM
+innovative Browser-in-the- Middle (BitM) and Persistent           attack that targets an authentication method that requires the
+MobileApp-in-the-Middle (MAitM) attacks that can defeat           physical attachment--on the client machine that is used by
+the majority of the MFA mechanisms except for the
+FIDO/CTAP2 one. How- ever this work stands as prosecu-
+tion of the research conducted by [9, 10] in order to overcome
+their limitations and be able to defeat FIDO/CTAP2 protec-
+tion too.
+
+   In works from J. Reynolds et al. [32]. and M. Kepkowski
+et al. [11]. Usability issues of this FIDO2 solution are pointed
+out where practicality of the usage of hardware dongle to
+guarantee security is questioned. In fact, it is discussed how
+the introduction of such hardware dongles poses new prob-
+lems to the security of the users such as the possibility of the
+dongle theft and to the service scalability for the companies
+that would need to guarantee as certain degree of recovery
+
+                                                                  123
+11 Page 6 of 26                                                                                                          C. Catalano et al.
+
+Fig. 4 Idea behind our proposed attack based on BitM and MitB. In             Fig. 5 Registration page of the target RP
+contrast to the regular BitM approach in [9, 10], and illustrated in Fig. 3,
+this new attack design implements also an additional data connection
+via HTTP between the FIDO hardware authenticator attached to the
+user's machine and the attacker's BitM machine
+
+the user to perform authentication--of anything more than                     Specifically, WebAuthn implements an extension of the
+mouse and keyboard devices, is doomed to failure.                             W3C's more general Credential Management API, which
+                                                                              aims at formalizing the interaction between web- sites and
+   This means that to overcome this limitation in the BitM                    web browsers when exchanging user credentials. The Web
+attack we need to establish between the user's client and the                 Authentication API [34] extends the Credential Management
+attacker's BitM not only a connection that provides.                          navigator.credentials.create() and navigator.credentials.get()
+                                                                              JavaScript methods so they accept a publicKey parame-
+   I/O such as the full browser web view, mouse and                           ter. The create() method is used for registering public key
+keyboard--as it happens so far--but also an additional com-                   authenticators as part of associating them with user accounts
+munication channel that makes possible the exchange in both                   (possibly at initial account creation time but more likely when
+directions of the WebAuthn API data between the Rely-                         adding a new security device to an existing account) while
+ing Party server (and in this case the BitM itself) and the                   the get() method is used for authenticating (e.g. when logging
+client computer--to which the authenticator is attached. In                   in) [34, 35]. However, for the purposes of our attack, named
+fact, without the payload (the challenge) generated from the                  BitM + from now on, we will focus on the get() method in
+Relaying Party and received by the BitM (which sits in the                    particular.
+middle between the Relaying Party and the authenticator), it
+is impossible for the authenticator to generate and sign the                  4.3 The WebAuthn API authentication operation
+assertion needed to complete service authentication. At the
+same time, it is impossible for the BitM with just the posses-                WebAuthn API implements two use cases: the registra-
+sion of the challenge--received from the Relying Party--to                    tion with create() and the authentication with get(). Just
+generate and to sign the assertion needed to finalize service                 once, at first, user registers and associates his/her hardware
+authentication if there is no viable way to reach the hardware                authenticator with an account that implements FC2W strong
+authenticator (only reachable by the victim's computer).                      authentica- tion. In the following, each time the need to
+                                                                              authenticate into the account arises, all the user has to do
+   This is the reason why the key point of our work is the                    is nothing more than to attach his/her authenticator to the
+design and the working implementation of an additional                        client computer and to use a gesture (e.g. a key press) to
+malicious communication channel which will enable the                         complete the login.
+transparent WebAuthn API data traffic between the client
+computer (that it is required to be compromised with a MitB
+attack) and the BitM. In Fig. 4 a synthetic scheme of our
+attack idea is illustrated.
+
+4.2 Targeting the W3C WebAuthn API                                            4.4 Targeting a reflected XSS vulnerable RP's
+                                                                                  website
+The proposed attack does not target the cryptography
+technology that ensures the FIDO hardware authentica-                         In order to carry on the demonstration of our attack we need
+tors security itself (e.g.: USB dongles) but operates on                      a target website (as shown in Figs. 5, 6 and 7) that imple-
+the communication between the Relying Party (the server                       ments WebAuthn API as MFA method and at the same time
+which provides a web service account access e.g. Google                       also exhibits a Reflected XSS vulnerability. Such scenario is
+Gmail, Facebook account etc.) and the client's computer.                      obtainable if we can get done at least one of these two things:
+Such communication relies on WebAuthn APIs, which have
+been standardized and implemented in virtually all mod-                          To find in the wild an RP website that implements
+ern browsers in order to enable strong authentica- tion.                      FC2W protection and is vulnerable to Reflected XSS attacks,
+                                                                              enabling JS injection by the attacker.
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...                                Page 7 of 26 11
+
+                                                                 4.5 Principle of the attack
+
+Fig. 6 Login page of the target RP                               As detailed in [9, 10], a normal BitM attack is able to defeat
+                                                                 normal one factor (based on "what I know", i.e. passwords,
+                                                                 PINs, etc.) and two factors authentication methods (namely
+                                                                 those based on "who I am", i.e. external messages, finger-
+                                                                 prints, face detection etc. or based on "what I own", i.e.
+                                                                 OTPs sent via SMS or emails etc.). At this regard, Table 3
+                                                                 at Sect. 5.2 in [18] shows state of the art of BitM attacks'
+                                                                 effectiveness against most of authentication methods avail-
+                                                                 able today, including FC2W.
+
+                                                                    What can be done when a device is physically connected
+                                                                 to the client computer making, by FC2W, BitM insuffi-
+                                                                 cient to overcome the security barrier? To succeed with
+                                                                 an attack, some sort of MitB must be added to BitM. In
+                                                                 our case MitB will be implemented by the exploitation of
+                                                                 an XSS vulnerability inside Relying Party website. To bet-
+                                                                 ter explain our proposed attack and highlight its underlying
+                                                                 rationale, we refer to three user authentication scenarios with
+                                                                 FIDO/CTAP2 with WebAuthn API.
+
+                                                                    (FC2W) in action:
+
+Fig. 7 Private area once the user has logged in                  1. Scenario 1: Legit user authentication using FC2W with-
+                                                                     out any attack in progress.
+   To build a demo RP website with the requested features
+i.e.: having FC2W imple- mentation and a Reflected XSS           2. Scenario 2: User authentication using FC2W attacked
+vulnerability deliberately put in place for the attack demon-        by regular BitM technique that proves to be ineffective
+stration purposes.                                                   in compromising user's security.
+
+   In this work, we are dealing with the second possibility,     3. Scenario 3: User authentication using FC2W attacked
+which proves to be more practical. So we introduce a simple          by the proposed BitM + that proves to be successful in
+demo web application with a web server--imple- menting               compromising the user's security.
+both regular password and WebAuthn API as authentica-
+tion factors--that exposes to the client a registration page, a  4.5.1 Scenario 1
+login page and a reserved user's profile page once the client
+has successfully logged in. Such web application not only        The first and simplest scenario relates to how FC2W authen-
+implements password and WebAuthn API as authentication           tication is supposed to work under normal circumstances.
+methods but also has been deliber- ately provided with a         Figures 8 and 9 show its operations sequence dia- gram and
+Reflected XSS vulnerability, exploitable by the attacker using   block diagram. In particular, the steps shown in Fig. 9 can be
+an URL parameter as an entry point to inject malicious JS        described as follows:
+code.
+                                                                 The legit user wants to authenticate to a Relying Party's web
+   The code base implementing both front-end and back-end        service, so he/she inserts username and password credentials
+of the demo web appli- cation--representing the target RP        that are sent by the client's browser to the server (step 1 in
+in our work--has been borrowed by the original.                  Fig. 9 / Seq.1 in Fig. 8).
+                                                                 The Relying Party's server acknowledges the received cre-
+   GitHub repository "webauth-demo" published by Fido            dentials. (Seq.2 in Fig. 8)
+Alliance and other contribu- tors [36­38]. However the orig-     If the credentials are correct, Relying Party generates a new
+inal repository's code has been enhanced and modified by         challenge. (Seq.3 in Fig. 8)
+us in order to render it more suitable for our demonstration     The challenge (which is basically a token string generated
+purposes.                                                        with specific crypto- graphic functions) is sent to the client
+                                                                 browser (Seq.4 in Fig. 8) together with other data specified
+   In our attack scenarios the RP website will be considered     in the WebAuthn API, including the mandatory rpId (Rely-
+reachable at the URL "https://fido.site.demo/".                  ing Party ID). The rpId, for instance, is a string-type JSON
+
+                                                                                              123
+11 Page 8 of 26                                                       C. Catalano et al.
+
+Fig. 8 Sequence diagram of regular user authentication with FC2W and  At this point two crucial security checks take place (Seq.6 in
+no attack in progress                                                 Fig. 8), we will call the SC1 and SC2. The first one (SC1)
+                                                                      is performed by the browser itself, that checks if the rpId
+Fig. 9 Block diagram of regular user authentication with FC2W and no  matches the origin (source URL string) of the page and meets
+attack in progress. Authen- tication steps are numbered. Examples of  all the requirements as prescribed in the documented speci-
+challenge and assertion JSON data objects are shown                   fications of W3C WebAuthn API [13].
+                                                                      If a mismatch occurs then the authentication process termi-
+                                                                      nates with a failure.
+                                                                      If SC1 is passed, the web browser goes to SC2 and calls the
+                                                                      WebAuthn API method implemented in the host OS (e.g.
+                                                                      Windows, Linux, Android, macOS, iOS) which is commit-
+                                                                      ted to trigger the system-wide administration-level authen-
+                                                                      tication window that asks the user to attach the hardware
+                                                                      authenticator to the computer and to perform the confirma-
+                                                                      tion gesture (step 4 in Fig. 9).
+                                                                      After the user attaches the hardware dongle the WebAuthn
+                                                                      API of the OS checks whether the hardware authenticator
+                                                                      is the legit one and whether it has been actually registered
+                                                                      to the specified Relying Party (this is SC2 and it is done by
+                                                                      checking once again the rpId field).
+                                                                      If the hardware dongle is found to be correct, then SC2 is also
+                                                                      passed and the OS will ask the user to perform the confirma-
+                                                                      tion gesture (Seq.7 in Fig. 8). At this point, the authenticator
+                                                                      proceeds to get the challenge from the browser through OS
+                                                                      WebAuthn API in order to sign it and generate the payload
+                                                                      with the assertion required for authentication.
+                                                                      The assertion (that is nothing but cryptographic string
+                                                                      data)--that can be cor- rectly generated and signed only by
+                                                                      the right authenticator (Seq.8 in Fig. 8) with the right chal-
+                                                                      lenge--is gathered by the OS and passed to the web browser
+                                                                      (step 5 in Fig. 9 / Seq.9 in Fig. 8).
+                                                                      Now the navigator.credentials.get() method called in the
+                                                                      browser, gets the response of the user's authenticator it was
+                                                                      waiting for and it is finally able to return as result the JSON
+                                                                      data object containing the assertion and the signed challenge
+                                                                      just obtained from the authenticator.
+                                                                      Now, the JSON payload can be transmitted back from the
+                                                                      client's browser to the Relying Party's server that can check
+                                                                      its validity (step 6 in Fig. 9 / Seq.10 in Fig. 8).
+                                                                      If the assertion is evaluated as valid, then the authentication
+                                                                      phase is completed and the user is granted an authenticated
+                                                                      account session (Seq.11 in Fig. 8).
+
+field that must contain the domain name of the Relying Party          4.5.2 Scenario 2
+(e.g.: "google.com" for Google Services).
+Once the payload that includes the challenge and rpId data            The second scenario describes a regular BitM attack against
+is received by the client (step 2 in Fig. 9), the method nav-         FC2W and the consequent failure of the attack. Such scenario
+igator.credentials.get() of WebAu- thn API is called by the           is taken into account in order to explain why a regular BitM
+login web page (step 3 in Fig. 9 / (Seq.5 in Fig. 8). This            attack is insufficient to break the defence built by FC2W
+method takes as argument the payload containing the chal-             authentication and why a more sophisticated approach has to
+lenge token, the rpId and other optional data.                        be conceived.
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...    Page 9 of 26 11
+
+   Let there be three main actors: V (the victim's browser),      possession could never replicate the cor- rect private key con-
+B (the attacker's machine implementing regular BitM) and          tained exclusively in V's dongle. Only the private key in V's
+RP (the Relying Party server which provides a web service         dongle can actually sign and generate the assertion required
+e.g.: Google GMail).                                              by RP's server for a successful authentication. This means
+                                                                  that, excluding other attack approaches based on the discov-
+   As preliminary conditions, let's start by assuming that the    ery and exploitation of potential hidden weaknesses inside
+victim has just run into a malicious webpage that exposes the     the FC2W dongles' cryptographic security algorithm (which
+BitM attack. This means that the victim is tricked into believ-   is based on asymmetric keys), it is not possible--under reg-
+ing that he/she is directly connected to RP's authentication      ular BitM attack conditions--to overcome that obstacle.
+webpage while instead he/she is just remotely interacting
+with the webpage instance running on the BitM attacker's             Hence, as it has been described, there are multiple reasons
+machine.                                                          why a regular BitM attack would never work against FC2W
+                                                                  authentication mechanism and those include:
+   At this point the following events occur:
+                                                                  1. SC1 fails (cross-domain error, solvable with some minor
+Once V is on the BitM malicious page he/she inserts via               modifications to the regular BitM approach).
+keyboard the users credentials that are hence provided to B.
+Now B, in possession of the credentials, asks RP (Relying         2. SC2 fails (could by bypassed and eluded with hardware
+Party) for authentica- tion.                                          or software dongle emulation and still using regular BitM
+Since the victim's account is protected by FC2W the RP                approach).
+generates a new challenge.
+The RP sends the challenge and the rpId not directly to V but     3. RP-related private key on hardware authenticator is
+to B which is the BitM that is--in fact--in the middle.               unreachable (unsolvable under regular BitM attack archi-
+Now that B has the new challenge and rpId the RP's front-end          tecture conditions).
+webpage calls on B the navigator.credentials.get() method
+with the challenge as argument.                                   4.5.3 Scenario 3
+This implies that the browser in B (that is BitM's browser)
+will perform the secu- rity check between rpId© and webpage       Now, after we discussed in Scenario 1 how FC2W normally
+origin (SC1). This check is passed because the BitM in B is       works and in Scenario 2 why regular BitM attack alone (as
+actually navigating the legit RP's webpage which exhibits         detailed in [9, 10]) is not enough to defeat FC2W strong
+an origin that matches the one that is indicated in the rpId      authentication, we are in a better position to figure out what
+provided by RP.                                                   it takes to design a successful attack against FC2W. Scenario
+Now the browser in B will pass the challenge and rpId to the      3 basically describes the idea and the principles behind the
+host OS on the same machine in order to get in touch with the     new "BitM + " attack here proposed, which makes use of a
+hardware authenticator through WebAuthn API implemented           BitM component that works together with a MitB one.
+on the OS.
+At this point host OS on B will prompt system level authen-          Scenario 3 almost entirely focuses on the same three actors
+tication window that asks the user to attach the hardware         and preliminary conditions already described in Scenario 2.
+dongle in order to perform SC2 check on the rpId and then
+generate assertion and signature based on challenge.                 However a few substantial differences are here introduced.
+But this is not possible: In fact the hardware dongle (authen-       Let there be three main actors: V (the victim's browser
+ticator) is physically owned by V and the host OS asking          compromised with MitB by leveraging XSS), B (attacker's
+for HW authenticator attachment is actually B's, potentially      machine implementing a new BitM, enhanced in order to
+residing in another continent with no way to reach required       handle network connection with MitB in V) and RP (the
+V's authenticator. In such circumstance, it means that SC2        XSS-vulnerable Relying Party server that we previously
+cannot even be performed in the first place, since V's authen-    introduced).
+ticator is missing and out of reach from the B's perspective.        Among the preliminary conditions, it will be assumed that
+So SC2 fails (and with it the entire authentication procedure)    the victim has just run into a malicious webpage that exposes
+before it can even start in the first place.                      the BitM attack just as it happens in Scenario 2. However a
+But, once again, let's concede that the attacker can actu-        key difference in the present scenario is in that--thanks to
+ally craft a counterfeit HW dongle that, once hacked by the       a malicious XSS payload enabling a MitB attack in V--it
+attacker, contains a fake registration to the target rpId. Under  is now possible to use a legit URL (exhibiting same origin
+these forced circumstances, SC2 could be passed.                  domain) of the RP login webpage as a vector of the improved
+Now that also SC2 check is behind us, ultimately it still         BitM/MitB attack ("BitM + "). The key point is in that, when
+remains the fact that the counterfeit HW dongle in attacker's     a same ori- gin URL (belonging to RP web service, e.g.:
+                                                                  "https://fido.site.demo/?xssParam
+
+                                                                  123
+11 Page 10 of 26                                                            C. Catalano et al.
+
+Fig. 10 When the victim navigates xURL the malicious JS code payload        attacker to overcome the very obstacles met in Scenario 2,
+is injected inside the RP client webpage by exploting XSS vulnera-          which were at the root of the failure of the regular BitM
+bility. Such code injection is responsible of overlaying the page view      approach. Note that the stage thus reached is akin to the
+transmitted from BitM and providing control of client WebAuthn API          consequences of a Reflected or Persistent XSS vulnerabil-
+functionalities to attacker. Note that a similar result can be achieved by  ity exploit where an arbitrary payload from the attacker can
+infecting the victim client with a malicious browser extension, having a    produce a malicious JavaScript code injection into a page
+yet more powerful vector of attack in terms of flexibility and persistence  coming from a trusted source.
+
+   {loadFromAttacker(/xss/payload.js)}") with a XSS-                           However, it is safe to say that a similar MitB attack can be
+                                                                            also perpetrated with malicious extensions installed in vic-
+exploitable parameter attached to it, is navigated by the                   tim's browser that enable cross-site scripting inside the RP's
+                                                                            target authentication webpage, thus providing the attacker
+victim, the malicious JS payload, inside the xssParam con-                  with the chance to remotely execute arbitrary JavaScript code
+                                                                            in any page of V's browser. Chezzi et al. [33] presented a work
+tent, proceeds to hide the original content of the actual login             on this alternative approach.
+
+webpage and overlays it with the webview transmission of                       It is also worth pointing out that the attack approach pre-
+                                                                            sented in Scenario 3 demonstrates a method of leveraging
+the login webpage controlled by B's BitM. We refer to such                  the hardware (HW) authenticator against the unsuspect-
+                                                                            ing victim. In fact, the additional communication channel
+malicious Reflected XSS payload as "xssPayload". The                        introduced by BitM + is essential for establishing a mali-
+                                                                            cious connection between the victim's physically-owned
+mali- cious parameter is used as the XSS exploit entry point                HW authenticator and the attacker-controlled BitM machine.
+                                                                            While the HW authenticator remains part of the authenti-
+which enables the attacker to inject arbitrary JS code inside               cation process, its role is effec- tively undermined from a
+                                                                            security standpoint. This mechanism bears resemblance to
+the RP domain and execute it. We will call xURL such kind                   Microsoft's RDP authentication features, as described in the
+                                                                            first paragraph of Sect. 4.6.
+of malicious URL. A real xURL looks like the following:
+                                                                               Figures 11 and 12 show the sequence diagram and block
+   https://fido.example.target.site: PORT/                                  diagram of Scenario 3. In particular, the steps shown in
+                                                                            Fig. 12 are included and referenced in the following descrip-
+   ?s < img hidden src x onerror ".                                         tion of the present scenario:
+
+   {let  svr      'https://attacker.site:PORT                               The victim using browser V navigates the attack vector URL,
+                                                                            that we call xURL (e.g.: https://fido.site.demo/?xssParam
+'; localStorage.setItem('svr',svr); let j
+                                                                               loadFromAttacker(/xss/payload.js)). When such xURL
+document.createElement('script');           j.src                           is navigated, the JS script (/xss/payload.js) served by the
+                                                                            attacker machine B is injected and exe- cuted inside RP page
+svr%2B'/xss/payload.js'; document.body.appendChild(j)}"                     on V's browser. Such script is committed to transmit and
+                                                                            overlay to the victim's navigated page the webview of the
+>                                                                           RP's authentication page actually residing in B's BitM (as
+                                                                            showed in Fig. 10). Hence the victim is actually interacting
+   But for practical reasons we will just omit its integral form            with the RP's authentication page forwarded and controlled
+                                                                            by BitM, and when he/she inserts the credentials via key-
+from now on. Figure 10 illustrates the concept just intro-                  board, they are actually collected by the BitM webpage under
+                                                                            B's control.
+duced.                                                                      At this point B, through the gained credentials, asks RP for
+                                                                            authentication (step 1 in Fig. 12).
+   This not only means that the victim is remotely interact-                Since the victim's account is protected by FC2W, the RP
+                                                                            generates a new challenge.
+ing with the webpage actually served by the BitM attacker's                 The RP sends the challenge and the rpId not directly to V but
+                                                                            to B on which is BitM running and which is--in fact--in the
+machine (B) but, by the xssPayload, the victim is also doing                middle between V and RP (step 2 in Fig. 12).
+                                                                            Now B has the new challenge and the rpId which are packed
+so with a legit URL from RP displayed in the V browser's                    in a JSON object that we call chObj (chObj can also contain
+
+address bar. We'll prove below how the method of imple-
+
+menting a MitB by xssPayload makes it possible for the
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...     Page 11 of 26 11
+
+                                                                                           Fig. 12 Sequence diagram of a successful attack that defeats FC2W
+                                                                                           using the proposed approach. The light orange area highlights where
+                                                                                           the BitM + attack components (the MitB malicious xssPayload injected
+                                                                                           in RP page on user's browser and the BitM in attacker's machine) place
+                                                                                           themselves in order to compromise the FC2W user authentication secu-
+                                                                                           rity
+
+Fig. 11 JS code injection into RP's front-end authentication page
+opened in BitM + in attacker's B machine: the attacker injects the code
+that overrides the original get() method with evilGet() malicious func-
+tion. evilGet() still takes in input chObj from the RP and gives in output
+an assertObj. The difference is in the fact that the assertObj, in the case
+of original get() method, is collected from HW authenticator attached
+to the user's local machine, in the case of the evilGet() function the
+assertObj is obtained from the HW authenticator attached to the vic-
+tim's remote machine infected by MitB/xssPayload. This figure shows
+how steps 3 to 7 in Fig. 12 are implemented
+
+other optional data as specified in WebAuthn standard). Then,      Fig. 13 Block diagram of a successful attack that defeats FC2W using
+the RP's authentication webpage on B's BitM does not call, as      the proposed approach. Authentication steps are numbered and briefly
+it should normally do, the navigator.credentials.get() method      commented
+(crossed out step 3 in Fig. 12), but the BitM is specifically
+modified in order to override such get() method present on the     data required for authentication from the HW dongle. When
+original RP's authentication webpage (Fig. 13) and replace         no attacker interferes in the middle, everything happens in
+it with a custom JavaScript function--that we will refer to as     the legit user's machine (V). On the other hand, the method
+evilGet(). So evilGet() in place of get() is called. The function  evilGet()--which overrides original get()--is a function that
+evilGet(), once called, stores in the BitM the JSON object         collects chObj, makes it available on the Internet and waits
+containing challenge and rpId data (chObj). Such chObj is          for a response from an external network actor in order to get
+made available on the Internet via a simple web server (that       the expected authentication data. In some way we can say
+exposes HTTP REST APIs coded by the attacker) running on           it "publishes" chObj online. This principle is illustrated in
+B. It is important to note that the replacement of get() method    Fig. 13.
+implementation does not change the purpose of the method
+itself, but changes how that purpose is achieved. When the            So the key thing here is that the original (and legiti-
+original get() method is called, it directly provides the HW       mate) method (execut- ing in V) expects response (i.e. the
+authenticator with the chObj content and waits for assertion
+and signature to be generated and returned: in other terms
+the use of such method is nothing more than to obtain the
+
+                                                                   123
+11 Page 12 of 26                                                   C. Catalano et al.
+
+signed ChObj) directly from local trusted HW authenticator,        After that, the unaware victim attaches the HW authenticator,
+meanwhile the modified--and malicious--method (actually            the WebAuthn API of the OS checks whether the hardware
+executing in B) awaits the same from someone else on the           authenticator is the legit one and whether it has been actually
+Internet (spoiler: the "someone else" will obviously be V's        registered to the specified Relying Party (this is the security
+browser where xURL is opened and xssPayload is running).           check SC2 and it is performed by examining the rpId field in
+                                                                   the chObj).
+   This aspect is illustrated in Fig. 12. In particular, in such   If the hardware dongle reveals to be correct, also SC2 is
+figure, it is shown a crossed-out Step 3 (representing origi-      passed and the OS will ask the user to perform the confir-
+nal.get) and a red Step 3 (representing malicious.evilGet that     mation gesture (e.g.: a finger tap or button press). After the
+replaces.get functionality).                                       victim's gesture, the HW authenticator proceeds to get the
+                                                                   challenge from the browser through OS WebAuthn API in
+   Keep in mind that since everything in B--especially the         order to sign it and generate the payload with the assertion
+BitM--is under the attacker's full control, it is trivial for the  data required for authentication.
+attacker to craft such modifications to the BitM WebAuthn          The assertion is gathered by V's OS which in turn passes it
+APIs using JavaScript code injection.                              to the infected web browser (step 6 in Fig. 12).
+                                                                   At this point the original navigator.credentials.get() method
+   We'll see below how this will be accomplished.                  that was called in the browser by the xssPayload, awaiting
+                                                                   for the response of the victim's authen- ticator, is finally able
+Once chObj containing challenge and rpId is exposed online         to return as result the JSON data object--that we will call
+by B, then the V actor comes back into play. Let's recall that     "assertObj"--containing the assertion and the signed chal-
+V--in the present Scenario 3--is represented by the victim's       lenge obtained shortly before from the HW authenticator.
+client browser that has been infected with MitB/xssPayload.        Now xssPayload in V has assertObj and can send it via REST
+MitB/xssPayload is designed to operate so that, while the          API to the B's attacker web server.
+xURL is navigated to and opened in V, it also polls in the         The B's web server receives assertObj (step 7 in Fig. 12) and
+background the HTTP server set up by B, to check whether           the method evilGet(), that was waiting for response from V,
+a new chObj is available there.                                    can finally return the call with the assertObj data.
+Such a chObj will be eventually found at the HTTP server as        Now that the JSON payload of assertObj--containing all
+the event chain unfolds (B will have put it there as it received   the information needed for RP to grant authentication--has
+chObj from RP).                                                    arrived to B, it can be sent as response from B to the Relying
+When xssPayload, unwittingly executed by V gets chObj              Party's server that can check its validity (step 8 in Fig. 12).
+from the web server, it can make a successful call to the orig-    The assertion is evaluated as legit and then the authentica-
+inal local WebAuthn API navigator.credentials.get() method         tion is finally granted. Hence, BitM in B is now successfully
+and give chObj as argument to it (step 4 in Fig. 12).              provided with an authenticated account session that was
+Now, the first security check (SC1) takes place and it is          protected with FC2W. The victim will remotely and unknow-
+passed, since the rpId in chObj matches the domain of the          ingly interact with his/her account session only through the
+webpage thanks to the fact that--as above clarified--all the       BitM in B under attacker's control. In other words the user
+arbitrary JavaScript code involved in V (including the get()       (victim) session is persistently opened in B's BitM not in V's
+call) can be run by xssPayload directly in the xURL's web-         web browser, and the victim is just navigating--via BitM
+page context which is considered directly originated by the        + attack--in his/her session available in B attacker's web
+trusted RP (hence no domain mismatch or cross-origin error         browser.
+is detected).
+Once SC1 is passed, the infected browser in V calls WebAu-         4.6 Observations
+thn API method implemented in the V's local host OS which
+will trigger the system-wide administration-level authentica-      4.6.1 Similarities and differences with Microsoft's Remote
+tion window (Fig. 14 shows an example of it) that asks the               Desktop Protocol (RDP) implementation
+victim to attach the hardware authenticator to the computer
+and perform the confirmation gesture. Note that the elevated       It can be noted that the entire BitM + attack presented
+dialog window (i.e. a dialog executed with administrative          in Scenario 3 is function- ally similar to something that
+privileges) is spawned directly by the OS on the victim's          already exists today and it is actually in operation in some
+local machine V and it is not part of the BitM webview             cases, even if for legitimate purposes. In fact, for instance,
+transmission (step 5 in Fig. 12). Furthermore the window           the native appli- cation "Remote Desktop Connection" for
+tells the victim that the origin of the authentication request     Microsoft Windows (also known with its former name "MS
+is the V's trusted local browser and not the remote BitM,
+making the process completely transparent and seamless to
+the victim and causing Scenario 3 to appear indistinguishable
+from Scenario 1 in terms of user experience.
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...           Page 13 of 26 11
+
+                                                                            Note that an RP (Relying Party) service provider could, if
+                                                                         it only wanted to, provide by itself a remote FC2W authen-
+                                                                         tication implementation entirely reliant on a webpage in the
+                                                                         browser and nothing else. That means that the use of an exten-
+                                                                         sion or JS injection via XSS would become unnecessary for
+                                                                         those non-malicious FC2W's use cases that are specifically
+                                                                         laid down by the RP.
+
+                                                                            In any case, it can be said that such procedures--if
+                                                                         implemented--have phishing attacks as their most obvious
+                                                                         practical application, and that is, in fact, the main focus of
+                                                                         the present work.
+
+                                                                         4.6.2 Cross-platform-ness
+
+Fig. 14 Sequence diagram of chObj and assertObj undergoing serial-       Another implication of our attack design is that it is cross-
+ization/deserialization opera- tions during the BitM + attack (Scenario  platform from an OS stand- point: on the client/victim
+3)                                                                       side it relies exclusively on web browser technologies
+                                                                         and HTML/JavaScript code that follow the same standards
+Terminal Services Client") has recently (2022) implemented               regardless of the OSes on which they sit. We can say that
+and documented [39]"the Remote Desktop Protocol (RDP):                   web browser in this case acts like a virtual machine on which
+WebAuthn Virtual Channel Protocol (MS-RDPEWA) which                      the same malicious code can be run regardless of the OS
+provides a way for a user to do WebAuthn operations over the             platform. How- ever, it could be noted that over time this
+RDP protocol. It enables a server to send WebAuthn request               is proving to be increasingly true for more and more legit
+to a client, the client can then use this request to talk to             applications too where the "hybrid app" approach caught
+authenticators (platform as well as cross- platform) and reply           on in app development and software engineering fields in
+with the response". That means that this commercially avail-             general. We can define hybrid app a type of mobile applica-
+able.                                                                    tion that combines elements of both native and web applica-
+                                                                         tions. It is developed using web technologies such as HTML,
+   protocol is normally adopted to enable users who work                 CSS, and JavaScript, and then wrapped in a native container
+with remote desktop sessions to get authenticated on their               (a browser) that allows it to be installed and run on mobile
+remote machines to a service protected with FC2W strong                  devices like a native app. Basically, hybrid apps leverage
+authentication, by still using their FIDO hardware dongle that           web technologies for cross-platform compatibility, enabling
+keeps working locally attached to the machine next to them.              developers to write code once and deploy it on multiple
+In other words, MS-RDPEWA protocol implements a bridge                   platforms (e.g., iOS, Android). After such brief description,
+connection (in fact described as a "Virtual Channel") for                similarities emerge between the hybrid app design approach
+FC2W between the local machine that can physically access                and the BitM + attack, in particular, with respect to the part
+the hardware dongle and the remote machine that needs the                of the attack represented by the xssPayload executed on the
+dongle in order to be able to authenticate.                              victim's browser and potentially running on any OS platform.
+
+   Our proposed BitM + attack does functionally the same                 4.6.3 Different ways to implement MitB
+thing, but focuses on its potentialities in phishing attacks
+scenarios.                                                               It is also worth noting that the effects of a MitB attack,
+                                                                         achieved with the exploita- tion of a Reflected XSS vul-
+   The crucial technical difference between MS-RDPEWA                    nerability within the RP's (Relying Party) authentication
+and our BitM + attack design is in that our solution--though             webpage, can also be replicated by installing a malicious
+it provides the same functionality as the MS- RDPEWA                     extension in the browser.
+protocol--it is not relying on any native application inten-
+tionally installed or directly built-in in the OS. Still instead,           However, in both cases some requirements must be met: if
+it merely relies on a webpage accessible by practically any              a malicious extension is the way chosen for the attack (like in
+web browser and on a XSS vulnerability or on a (malicious)               our main case study), then it is required to fool the victim on
+extension installed into it.                                             the client side by finding a way to surreptitiously install such
+                                                                         extension, for example, with some social engineering trick in
+                                                                         order to persuade the victim to do so. In the case of an XSS
+                                                                         exploit, on the other hand, a vulnerability should be found in
+
+                                                                         123
+11 Page 14 of 26                                                                      C. Catalano et al.
+
+the first place, and this, in many cases may prove neither easy  as opposed to employing different languages. Such set of
+nor likely to happen. However in presence of a successful        characteristics makes Node.js a very useful and flexible envi-
+XSS exploit, it would be more difficult for the victim on the    ronment for the attack approach proposed here, also making
+client side to realize that he/she is under such kind of attack  it sufficient for the attacker to write the required code by
+or even to prevent it, since no additional operation by the      using just a single programming language (JavaScript) for
+victim is required such as malware extension unconscious         both.
+installation.
+                                                                    the BE and FE sides of the attack architecture.
+
+5 Software architecture: design choices                          5.1.2 Puppeteer API
+  and implementation
+
+The Scenario 3 just discussed served to present the BitM +       Puppeteer is a Node.js library which provides a well-
+attack idea aimed at defeat- ing FC2W strong authentica-         documented and maintained [43] high-level API to control
+tion. We now proceed to describe the software technologies       Chrome/Chromium browser over the DevTools Protocol. For
+and architectural design choices that led us to implement a      our attack implementation needs, the interesting point is that
+working BitM + attack prototype. Basically we are illustrat-     almost every task normally achievable in the browser by man-
+ing a weaponizable Proof of Concept (PoC), the components        ual user operations can be programmatically accomplished
+involved in it and how they cooperate in order to conduct to     through Puppeteer library, that provides the attacker with
+a successful phishing attack against FC2W.                       an extremely powerful and convenient tool to work with. In
+                                                                 other words the programmer has full control of the Chromium
+   The entire BitM + architecture is divided into two main       browser instance launched and handled by Puppeteer and is
+parts communicating with each other:                             able to automate every aspect of its behaviour and function-
+                                                                 alities (from the most external feature of the native browser
+   Back-End (BE): Implemented with an enhanced BitM              application itself to the most restricted and sandboxed con-
+design, the Back-End communicates with the Front-End via         text such as the DOM content of an HTML page opened
+HTTP/WebSocket. It represents actor B in Scenario 3.             in it) by just using JavaScript code. Remember that all of
+                                                                 this happens in Node.js environment that can also directly
+   Front-End (FE): JavaScript code injected through an           provide OS level APIs such as, for example, disk file I/O
+XSS vulnerability (xss-Payload), implementing MitB. It           and a lot more. All in all, Puppeteer offers a versatile range
+operates within the victim's (actor V's) browser in Scenario     of capabilities, allowing users (or even attackers) to auto-
+3.                                                               mate various tasks such as form submission, UI testing, and
+                                                                 keyboard input with the ability to create automated testing
+   A set of software utilities, environments and frameworks      environments. Puppeteer can be also used for efficient web
+have been involved into the development of both BE and FE.       pages and Chrome extensions testing providing a compre-
+                                                                 hensive toolkit for web development and testing needs.
+5.1 Involved software tools in BE
+                                                                 5.1.3 Chromium browser
+5.1.1 Node.js
+                                                                 Chromium is a web browser project that is both free and open-
+Node.js consists in a versatile, open-source server environ-     source, is primarily developed and maintained by Google [15,
+ment that functions seam- lessly across multiple platforms       44]. This codebase serves also as the founda- tion for the
+[40­42], including Linux, macOS, Windows, and more. As           Google Chrome browser, which, in contrast, is proprietary
+a back-end JavaScript runtime environment operating on           software with additional features.
+the V8 JavaScript engine, Node.js executes JavaScript code
+outside the confines of a web browser. Node.js covers a sig-        Widely utilized, the Chromium project is the basis for var-
+nificant part of our BE implementation, in fact many of the      ious browsers, including Microsoft Edge, Samsung Internet,
+libraries and scripts coded in the BE--that serve for the        Opera, Vivaldi, and several others. Additionally, numer-
+attack--work under Node.js.                                      ous app frameworks incorporate significant portions of the
+                                                                 Chromium code.
+   Node.js is usually leveraged to employ JavaScript for cre-
+ating command line tools and executing server-side scripting.       In our design a release of Chromium has been chosen to
+The capability to run JavaScript on the server is commonly       work with Puppeteer API.
+utilized to dynamically generate web page content before
+delivering it to the user's browser. Consequently, Node.js
+embodies a "JavaScript everywhere" paradigm, streamlining
+web application development by using a single program-
+ming language for both server and client-side programming,
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...   Page 15 of 26 11
+
+5.1.4 Express.js                                                 proxy that takes the VNC session from the VNC server run-
+                                                                 ning on its own machine and forwards it via WebSocket
+Express.js is a backend web application framework for devel-     connection. At this point, noVNC server is also responsible at
+oping RESTful APIs using Node.js. It is designed for the         exposing a web application (a simple webpage)--navigable
+development of web applications and APIs [45], it represents     on FE by user's/victim's browser--that contains an HTML
+the de facto standard server framework for Node.js [46].         canvas that displays the VNC remote desktop envi- ron-
+                                                                 ment. In the case of our attack, the VNC remote desktop
+   It is simple and minimalist and that makes it the most        environment shows the victim the BitM + Chromium win-
+obvious choice for the implementation of a malicious API         dow opened and running, giving him/her the illusion that
+server in attacker's BE. The introduction of this component      the page he/she is navigating is being navigated on his/her
+in the BitM + design represent the main addition in terms of     local browser, while it is actually navigated on the BitM +
+set of libraries and tools used in BE side with respect to BitM  Chromium browser running on BE attacker's machine.
+presented in [9].
+                                                                    The just described mechanism is also visible in Fig. 10
+5.1.5 VNC/noVNC                                                  which shows the transmis- sion of BitM's browser window
+                                                                 page from the attacker's machine to victim's browser with a
+Virtual Network Computing (VNC) is a technology that             remote desktop protocol such as, in this case, VNC handled
+enables remote access and control of a computer or server        by the noVNC library.
+over a network. It allows a user to view and interact with
+the desktop environment of a remote system as if they were          noVNC uses many modern web technologies so a for-
+physically present in front of that machine. VNC operates by     mal requirement list for the browser is difficult to produce.
+transmitting the graphical desktop data from the remote com-     However the list of the minimum versions of the cur- rently
+puter to the viewer application, and it sends back user inputs,  known compatible browsers includes: Chrome 64, Firefox
+such as mouse and keyboard actions. It also includes clip-       79, Safari 13.4, Opera 51, Edge 79. So all these browsers
+board copy/paste features with full Unicode support. This        and their later versions support (and hence can potentially
+technology is widely used for remote administration, sup-        deliver) a BitM/BitM + attack to the user.
+port, and collaborative work, providing a means to access
+and manage computers from a distance. Such VNC function-            To sum up, the main steps to set up a noVNC working
+alities are typically provided by using a VNC server (native     session are: run a VNC server on the BE side and run a
+application installed and running on the remote machine that     WebSocket proxy that points to the VNC server, and then,
+needs to be controlled) and a VNC client (native applica-        on FE side, load the page and connect.
+tion installed and running on the machine used by the user
+to control the remote one). In this way the remote machine          Note that VNC protocol and the noVNC project [47] are
+with VNC server running exposes the desktop environment          an open source alterna- tive to, for example, Microsoft's RDP
+on the network so the user with the VNC client can connect       proprietary protocol. It can be shown that RDP can also be
+to it.                                                           used as a replacement for VNC/noVNC component in the
+                                                                 BitM + imple- mentation, in fact even if RDP is a propri-
+   noVNC is both a HTML VNC client JavaScript library            etary protocol, some of its specifications are available and
+and an application built on top of that library [47].            other parties have developed their own RDP clients. Many
+                                                                 examples of independent web based (HTML5/JS) imple-
+   Under the hood noVNC can be seen as basically a web           mentations of RDP clients are available online on GitHub.
+server (typically imple- mented with nginx [48]) that uses       However noVNC arguably represents the best and most bal-
+WebSockets [49] and HTML canvas to deliver reliable              anced choice to date for BitM/BitM + attack in terms of
+and responsive real-time VNC session (at the base of the         support, source code availability and features reliability.
+BitM/BitM + working prin- ciple) just via browser using just
+web technologies and hence dismissing the necessity of an        5.1.6 ngrok
+ad-hoc native VNC client application installed in the user's
+(or victim's) OS.                                                Ngrok is a tunneling and reverse proxy service that allows to
+                                                                 expose a local server to the Internet via HTTPS protocol. It
+   The noVNC WebSocket server runs--in our BitM +                provides a secure way to share and test local web develop-
+design--on BE machine. BE runs also a native VNC server          ment projects or APIs with others.
+app. The purpose of noVNC WebSocket server is to gather
+VNC session provided by the native VNC server app and               ngrok is usually used during the development and test-
+deliver it via HTTP/WebSocket on an HTML canvas in a web-        ing phases of web applica- tions, especially when dealing
+page exposed by the noVNC library itself and made available      with webhooks, APIs, or any scenario where external ser-
+to web browser. So noVNC can be seen as a VNC session            vices need to connect to a local server. So even if ngrok is
+                                                                 primarily designed for development purposes--since it can
+
+                                                                 123
+11 Page 16 of 26                                                  C. Catalano et al.
+
+expose over HTTPS, with little configuration, a web appli-        consistent and compact architectural design of the BE imple-
+cation on the Internet from a local machine server--it has        mentation, but also allows for good scalability and portability
+been chosen as component of BitM + attack responsible for         in a future perspective.
+delivering the malicious attack's webpage and its APIs.
+                                                                     In particular for our PoC, an already available boilerplate
+   Technically it is a service that can translate a server which  repository on GitHub has been used [50, 51]. Such reposi-
+is running over insecure HTTP localhost (that can be poten-       tory consists of a Docker image that runs a container with a
+tially reachable only from the server itself and the other        basic configuration that offers noVNC connectivity between
+machines in the same LAN) to a secure HTTPS server with           the container and the host OS. Then on adopted, such repos-
+a static address reachable from anywhere on the Internet.         itory has been further developed in order to insert and code
+                                                                  the components needed for the BE implementation of the
+   From a BitM + attack's technical perspective, one of the       BitM+ . Similarly other equivalent boilerplate Docker repos-
+most important ngrok's features is that the web resources         itories or a Docker image written from scratch can be used
+are provided over HTTPS protocol, which is a manda-               to achieve the same results. Moreover the BitM + attack can
+tory requirement in the specifications of WebAuthn APIs:          prove just as effective also if implemented without using
+such APIs' methods (e.g.: navigator.credentials.get()) can be     Docker containerization at all: the required software code can
+called only from an HTTPS-secured webpage context.                be written, configured, and deployed directly on the attacker's
+                                                                  machine host OS (both Linux and Windows based OSes were
+5.1.7 Docker                                                      tested). This will not impact or alter the effectiveness of the
+                                                                  attack. However a Docker con- tainerization of the attack's
+Docker is a platform-as-a-service (PaaS) tool, utilizing OS-      BE appears to be a better design choice from a purely tech-
+level virtualization, designed for the creation, deployment,      nical point of view.
+and execution of applications through con- tainerization.
+Containers are self-sufficient packages that encapsulate all      5.2 Involved software in FE
+the necessary components for running software, including
+code, runtime libraries and system tools. The core of Docker      5.2.1 Browser (client-side) vulnerability exploitation:
+is the Docker Engine, comprising a server, REST API and                 JavaScript code injection through Cross-Site Scripting
+command-line interface for interacting with Docker. Docker              (XSS)
+images, lightweight and standalone packages, serve as the
+blueprints for containers. These images can be stored in          Cross-Site Scripting (XSS) is a type of security vulnerabil-
+repositories like Docker Hub, with Dockerfiles providing          ity commonly found in web applications. It occurs when an
+the instructions for image creation. Containers, instances of     attacker injects malicious scripts into web pages viewed by
+Docker images, offer portability and consis- tency across dif-    other users. These scripts can execute arbitrary code in the
+ferent environments, aiding in reliable application execution.    context of the vic- tim's browser, allowing the attacker to
+Docker simplifies development and deployment by ensur-            steal sensitive information, manipulate the appearance of the
+ing standardized and reproducible application packaging and       web page, or perform actions on behalf of the user.
+execution, leading to increased efficiency and consistency in
+software workflows.                                                  Reflected XSS is one of the types of XSS attacks and the
+                                                                  one used in this work to perpetrate the presented attack. In
+   So the key principle of the Docker tool workflow here is       particular, in a reflected XSS attack, the malicious script is
+that the Dockerfile repre- sents the "recipe" containing all      injected into a web application and then reflected back to
+the instructions that determine the build of a virtual envi-      the user's browser within the response from the server. This
+ronment's image. An image can be seen as a static snapshot        often happens when user input is not properly validated or
+of the state of that virtual environment. From that "frozen"      sanitized by the server before being included in the server's
+snapshot which is the image, a container instance of it can       response.
+be run. In fact, the container executes and "brings to life"
+the actual virtual environment contained in the image. Then,      5.3 Back-end side tasks
+where the image is a self-contained static standalone file, the
+container launched out of it is the running instance of the vir-  The software that implements the BE resides in the attacker's
+tual environment contained in the image along with all the        machine. Such BE machine has been tested to work either
+host system (the OS hypervisor) resources allocated in order      with Windows or Linux host OS. Also, a fully functional
+to run it.                                                        cross-platform containerized version of the BE has been
+                                                                  developed with Docker which is the version that will be
+   All these features make Docker a very suitable tool for BE     described here. BE's main tasks are:
+side BitM + attack development. As it not only allows for a
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...  Page 17 of 26 11
+
+1. BE-Task1: Implementing the improved BitM by using a
+    Puppeteer-controlled Chromium browser instance (BitM
+    at its core is nothing but a regular web browser with spe-
+    cific software modifications aimed to programmatically
+    modify its behaviour);
+
+2. BE-Task2: Providing remote BE I/O functionality--i.e.
+    BitM webpages' live video streaming coupled with
+    mouse and keyboard input capability--to the FE through
+    Internet;
+
+3. BE-Task3: Providing ad-hoc HTTP APIs over the Inter-
+    net for WebAuthn API- related data exchange between
+    BE-FE and other optional features.
+
+5.4 Front-end side tasks
+
+The FE is implemented with a JS script served by the attacker
+B and injected via Reflected XSS into RP page (we simply
+call it xssPayload). It represents the MitB component of the
+attack. Note that use of an XSS exploit as vector of attack
+works on practically any browser including Google Chrome,
+Microsoft Edge, Mozilla Firefox or Apple Safari. FE main
+tasks are:
+
+1. FE-Task1: Overlaying BitM webpage remote session on          Fig. 15 Block diagram of the BE's network ports configuration and high
+    a target page that meets specific conditions in its URL     level overview of the BE architecture
+    (we call such target xURL);
+                                                                4. noVNC.html web application entry page for BitM +
+2. FE-Task2: Periodically checking for new challenges               attack delivery via noVNC.
+    from BitM (originally pro- vided by RP) by using HTTP
+    polling;                                                    5. payload.js JS script file served by BE in order to be
+                                                                    injected into RP's XSS- vulnerable webpage.
+3. FE-Task3: Receiving the challenge and then call WebAu-
+    thn API's get() method on victim's browser in order to         We will now examine each one of them. All these the
+    generate the assertion with victim's HW authenticator       components are illustrated in the BE block portrayed in the
+    and sending it back to BE.                                  top area of Fig. 15.
+
+5.5 Back-end side components                                       We assume that each one of the components listed above is
+                                                                located inside a Docker image (BEimage) which provides the
+Now that a complete background on technologies involved         containerized Docker environment (BEcontainer) that runs
+in the presented BitM + attack as just been provided, we will   the BE side of the BitM + attack.
+proceed to describe the very attack implemen- tation--which
+relies on such technologies--that has been carried on both      5.6 mybrowser.js
+BE and FE parts. Let's start from the BE: we now describe
+the single components that implement it and try to explain      This script file runs under Node.js which is installed
+how such components cooperate in order to deliver a success-    (and runs) in BEimage docker con- tainer (as shown in
+ful BitM attack. The BitM + attack components specifically      Fig. 15). It represents the core of BitM functionality: it
+written by the attacker in the BE are:                          imports Puppeteer API modules that launch a fully pro-
+                                                                grammatically controlled Chromium browser instance. Such
+1. mybrowser.js Node.js main script file;
+2. bitm overrider pup.js JS injection script file;
+3. myutils.js utilities script file used by bitm overrider
+
+    pup.js;
+
+                                                                123
+11 Page 18 of 26                                               C. Catalano et al.
+
+Chromium instance implements the BitM itself and--un-              improving responsiveness of BitM + attack's page, thus
+der the typical attack circumstances--it navigates the legit       making more difficult for the victim to spot the attack.
+authentication web page of a RP (RPpage) service account.      4. GET /xss/payload.js: it serves the script file payload.js
+mybrowser.js--through Puppeteer--is also responsi- ble of          which represents the XSS code payload (xssPayload).
+the injection of the JavaScript code into the RPpage con-
+text. The JS code to be injected into RPpage is contained in      Such MalSrv APIs are exposed on localhost's port 3081
+bitm overrider pup.js, and it will be described later. Inside  (http://localhost:3081) in Docker container's virtual environ-
+mybrowser.js it is also implemented a web server by using      ment.
+Express.js library. It provides REST APIs that serve dif-
+ferent tasks for BitM + to work. As it can be noticed in       5.7 bitm overrider pup.js
+Fig. 15 such web server (we call it MalSrv) exposes a set
+of REST APIs (we call them MalAPI s). These API work           Contains the JavaScript code that needs to be executed
+together with built-in Chromium localStor- age APIs [52]       inside the RPpage. When RPpage is navigated, the script
+that are used to keep track of chObj and assertObj involved    browser.js--through Puppetter API--injects the bitm over-
+during the attack process. In order to do this two varibles    rider pup.js code in RPpage. The specific bitm overrider
+are instanced: "mychallenge" and "mysolution", the first       pup.js con- tains the code that overrides the original naviga-
+one stores the chObj received by the legit RP (Relying         tor.credentials.get() method in RPpage with a new function.
+Party) waiting to be transmitted to the FE's MitB/xssPayload   When we are in presence of an attack situation, such new
+and the latter stores assertObj received back from FE's        function we named evilGet() (already introduced in Scenario
+MitB/xssPayload. Both variables are initially empty and set    3) saves the chObj--provided by RP to RPpage--into the
+to null by default. They can be seen as some sort of tem-      "mychallenge" localStorage variable, so it can be made avail-
+porary "recipients" that enable communication between the      able from MitB/xssPayload in FE by polling the MalSrv's.
+Chromium browser instance itself (representing the BitM
+component) and the MalSrv component, both implemented             /getChallenge API which basically reads the "mychal-
+inside the mybrowser.js script. Now we proceed to list and     lenge" content (which can be either a chObj or a null value
+further detail the MalSrv APIs, which are:                     if no challenge is available at the time the API is called) and
+                                                               sends it as response to the FE. In the meanwhile the evilGet()
+1. GET /getChallenge: it has no parameters and it is periodi-  call does not return and stays alive waiting for a new assertObj
+    cally called (polling) by MitB (xssPayload) in the FE and  by checking the content of the "mysolution" localStorage
+    responds with a new chObj if any is available. The chObj   variable until it is not null. A few moments later, when the
+    is gathered from a localStorage variable--named "my-       FE, in possession of chObj, manages to extract the assertObj
+    challenge"--stored in Chromium browser instance. Such      from the victim, then the FE calls /postSolution POST API
+    variable is updated and filled with a new chObj whenever   with assertObj in its body. /postSolution once called on the
+    a login request by the victim has just been remotely per-  MalSrv receives and saves the assertObj in the "mysolution"
+    formed from FE--via noVNC--on the BitM.                    local- Storage variable. Now the "mysolution" localStorage
+                                                               variable is not null anymore as it contains the required asser-
+2. POST /postResult: it is called by MitB (xssPayload) in      tObj. So the evilGet() function can finally return assertObj to
+    the FE. The payload in its body contains a valid asser-    RP server in order to complete the authentication. After the
+    tion JSON object (assertObj) that is sent to MalSrv in     authen- tication completion both "mychallenge" and "myso-
+    BE. When this API is called, the assertObj is saved in     lution" variables are flushed and set back to null. The above
+    "mysolution" localStorage variable that was previously     described mechanism is the main task performed by the bitm
+    emptied (set to null).                                     overrider pup.js script and it is also illustrated in a simplified
+                                                               manner in Fig. 13.
+3. POST /postScreenSize: it is called by MitB (xssPayload)
+    in the FE every time a JS window.onresize event is fired   5.8 myutils.js
+    in the BitM + page opened on the victim's browser. This
+    POST request's body is a JSON object formatted as "{w:     To perform its tasks, the JavaScript code contained in bitm
+    xxxx, h: xxxx}" (e.g.: {w: 1704, h: 692}) which tells      overrider pup.js imports some auxiliary functions provided
+    the BE the new size (height and width values) of the       by myutils.js. Such code contains function that perform seri-
+    victim's browser window in order to resize the corre-      alization/deserialization of data of chObj and assertObj. This
+    spondent BitM + Chromium window in BE accordingly          is required since both chObj and assertObj--that are gener-
+    (and hence transmit back to the FE the BitM + 's web       ated, exchanged and used by RP (Relying Party) and HW
+    page view with the correct updated size). This ensures     authenticator during the FC2W process--contain JSON data
+    a better and seamless victim's browsing experience by      with ArrayBuffer [53] data type. Data of such type cannot
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...                                                                   Page 19 of 26 11
+
+                                                                  BEcontainer)--exclusively the HTTP API's traffic related to
+                                                                  it (i.e.: /getChallenge,
+
+                                                                     /postSolution, /postScreenSize). This means that any
+                                                                  request pertinent to Mal- Srv arriving on port 80 from out-
+                                                                  side the BEcontainer is forwarded/proxied to port 3081 (the
+                                                                  MalSrv's port). The rest of the HTTP/WebSocket traffic that
+                                                                  arrives on port 80 is handled by nginx server and redirected to
+                                                                  the noVNC server on port 6080 in order to deliver the typical
+                                                                  VNC connection functionality on which the BitM + relies.
+                                                                  noVNC.html page represents the page BitM + attack entry
+                                                                  point and it is exposed by nginx inside the Docker BEcon-
+                                                                  tainer at http://localhost:80 and binded and made accessible
+                                                                  to the FE's host OS machine on http://localhost:6080. So the
+                                                                  Docker container, in this case, publishes to the host OS the
+                                                                  port 6080 when running.
+
+                                                                  5.8.2 payload.js
+
+                                                                  It is requested during the Reflected XSS RP (Relying Party)
+                                                                  website exploitation when xURL is navigated by the victim.
+                                                                  It contains the xssPayload and represents the MitB imple-
+                                                                  mentation itself on FE. Once requested, the code content is
+                                                                  injected into the RP's XSS-vulnerable webpage.
+
+Fig. 16 Block diagram of the FE's xssPayload/MitB implementation  5.9 ngrok service: from localhost page to HTTPS
+                                                                      page on the Internet
+be transmitted via REST API right away. First, data need to
+be serialized and encoded in form of stringified JSON fields      The ngrok service app is configured and run on FE's host
+in order to be suitable for transmission via MalSrv HTTP          OS (hence outside BEcontainer) in order to expose to the
+APIs, and then converted back in ArrayBuffer type when            Internet the local noVNC.html page that car- ries the BitM +
+they need to be evaluated by the two end points: the naviga-      attack, which otherwise would be only locally available--as
+tor.credential.get() method in FE must take as an argument        mentioned.
+a chObj in ArrayBuffer data type. Similarly the assertObj
+must be in ArrayData buffer format when it is returned by            - at http://localhost:6080. So ngork translates
+evilGet() to the RP server. The diagram in Fig. 16 highlights     http://localhost:6080 to a public Inter- net HTTPS
+such data conversion mechanism.                                   domain (e.g.: https://bitmpattack.dev on the default 433
+                                                                  HTTPS port). At this point, the entry point web page (i.e.
+5.8.1 noVNC.html                                                  noVNC.html that we will call ePage) of our BitM + attack
+                                                                  is made available potentially to anyone on the Internet. The
+The noVNC.html code presents to the victim the BitM +             BE's network ports configuration and overall architecture is
+Chromium browser RPpage making him/her believe he/she             described in the big picture of Fig. 15, however Fig. 17 offers
+is in front of a legit page directly provided by RP (Rely-        a more abstract and essential representation of the BE that
+ing Party) server. Such page in the present implementation        helps to better explain how the different BE's components
+is exposed by an nginx web server pre-installed and config-       are organized and interconnected.
+ured inside the Docker BEcontainer made available at [51].
+Such nginx server--listening on port 80--also serves as a         5.10 Front-end side components
+reverse proxy and we have modified its default configuration
+file inside sites-available folder in order to redirect to Mal-   We are now describing the relevant features on the FE side
+Srv--active on port 3081 from mybrowser.js (still inside the      i.e.: the xssPayload--which implements MitB attack on the
+                                                                  victim's browser (Figs. 18, 19, 20, 21, 22, 23, 24, 25 and 26).
+
+                                                                     We will explain how such component works with the BE
+                                                                  in order to deliver a successful BitM + attack. The features
+                                                                  of xssPayload which basically is a JS script file served by
+
+                                                                  123
+11 Page 20 of 26                                                         C. Catalano et al.
+
+Fig. 17 BitM + attack: stage 1. Here the actors and the starting condi-  Fig. 19 BitM + attack: stage 3. The victim uses mouse and keyboard
+tions of the attack scenario are described                               devices to insert his/her password on the login page transmitted from
+                                                                         BE. Until this point BitM + attacks has no difference with BitM in terms
+                                                                         of functionality. From now on BitM + innovations are used in order to
+                                                                         carry on the attack against FC2W
+
+Fig. 18 BitM + attack: stage 2. The victim uses mouse and keyboard       Fig. 20 BitM + attack: stage 4. The BitM sends to RP (FIDO Site Demo
+devices to insert his/her username on the login page transmitted from    server) the credentials remotely inserted by the victim from FE. The RP
+BE. Until this point BitM + attack has no difference with regular BitM   validates the credentials, if they are valid it generates a new challenge
+in terms of functionality                                                (a new chObj) that is provided to BitM + running on BE. At this point
+                                                                         chObj is passed to MalSrv which publishes it by making it available
+the attacker server (MalSrv) and injected inside the XSS-                through the /getChallenge API
+vulnerable RP's webpage are listed as follows:
+                                                                            The FE side and its components discussed in the following
+1. arbitrary code injection into target page (xURL page).                are portrayed in Figure.
+2. communication tasks via HTTP REST API with
+                                                                            16.
+    attacker's BE, in particular MalSrv.
+3. defacing the HTML DOM content of the RP's vulner-                     5.10.1 Code injection
+
+    able webpage: it overlays malicious HTML content on                  Code injection capability grants the attacker the main and
+    original RP page content (reached by opening xURL) in                most important advan- tage of implementing such MitB
+    order to provide BitM webview streaming via noVNC.                   attack, i.e. the possibility to arbitrarily inject any JavaScript
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...             Page 21 of 26 11
+
+Fig. 21 BitM + attack: stage 5. The xssPayload, which in the mean-         Fig. 23 BitM + attack: stage 7. The RP server (FIDO Site Demo) checks
+time was polling MalSrv on /getChallenge, discovers the new pub-           the assertObj validity and successfully authenticates the BitM + . BitM
+lished chObj. Such chObj is passed to the original WebAuthn API            + is provided with a FIDO Site Demo Account session of the vic-
+navigator.credentials.get(chObj) method, which is called inside the        tim on the Puppeteer/Chromium browser instance (in BE) under full
+xURL page's context. Such context is trusted since it exhibits the         attacker's control. The victim has the illusion that he/she just authen-
+legit'fido.site.demo' domain. So the browser calls in question the vic-    ticated on his/her own browser but he/she actually looking to a VNC
+tim's host OS which uses its native WebAuthn API to spawn a system         session showing the authentication page actually running on BE's BitM
+authentication window that asks the victim to insert his/her HW authen-    + . The victim press "Next" to enter to continue and enter the account
+ticator. Then the victim inserts his/her HW authenticator in his/her PC's
+USB port as requested
+
+Fig. 22 BitM + attack: stage 6. Once the victim inserted the HW authen-    Fig. 24 BitM + attack: stage 8. From now on, the victim will now
+ticator in the USB port of is machine (the FE machine), the confirmation   unknowingly continue to navigate and use his/her account through
+window ask the victim to perform the gesture (e.g. touch the key) to con-  noVNC. But such account is actually opened on BitM + in the remote
+firm authentication. After victim's gesture the assertObj is generated,    BE's attacker machine
+gathered by xssPayload and sent to BE's MalSrv by calling /postSolu-
+tion. MalSrv receives the assertObj and passes it to BitM + . Then BitM    with a parameter (xssParam) responsible for the XSS vul-
++ can send assertObj to FIDO Site Demo RP server for validation            nerability and used as the client-side attack entry point.
+                                                                           xssPayload proceeds to alter the original xURL page and
+code into a webpage navigated by the victim's and directly                 overlays, on the xURL page's DOM document (that is so
+pro- vided by RP server (for example the vulnerable XSS                    far exhibiting the legit fido.site.demo login page), an iframe
+demo site reachable at https://fido.site.demo). xssPayload is              element that covers the entire xURL page's webview (see
+injected when the victim navigates the spe- cific target page              Fig. 10). Such iframe ele- ment has the src attribute set to
+xURL that can be exemplified as https://fido.site.demo/*?                  https://bitmpattack.dev and hence it will load and present to
+xssParam loadFromAttacker(/xss/payload.js). Note that                      the victim the ePage (which essentially is the noVNC.html
+such xURL exhibits a legit target RP (Relying Party) domain                served by BE and exposed on the Internet with ngrok). ePage
+                                                                           will present the remote Pup- petter/Chromium BitM instance
+
+                                                                           123
+11 Page 22 of 26                                                  C. Catalano et al.
+
+Fig. 25 Security window spawned by native Platform WebAuthn API
+on the victim's host OS (in this case Windows 11)
+
+showing a legit fido.site.demo (FIDO Site Demo RP page)
+login page. So the victim is induced to interact and insert via
+VNC his/her credentials in the remote FIDO Site Demo RP
+login page controlled by BE's Pup- petter/Chromium BitM
+instance. However, what has been described so far in this
+paragraph is part of the normal BitM approach.
+
+   xssPayload is also responsible of calling the regular nav-
+igator.credentials.get() (or simply get()) method when a
+chObj--origi- nally generated from RP (Relying Party) in
+BE is discovered during polling with.
+
+   /getChallenge. The chObj contains the rpId field set to
+`fido.site.demo'. So the get() method can be successfully
+called only in pages having fido.site.demo as URL (see the
+SC1 security check described in Scenario 2 and 3) which is
+the case. Once get() method has been called and the browser
+through the victim's OS has obtained the assertObj from the
+HW authenticator, xssPaylaod is committed to send assertObj
+to B's MalSrv via POST /postSolution. xssPayload is also
+responsible to listen at window.onresize events fired by the
+xURL page and to send the updated page's size data (height
+and width) to B's MalSrv via POST /postScreenSize. xssPay-
+load also includes the equivalent code contained in myutils.js
+in order to correctly perform the serialization/deserialization
+opereation required when dealing with chObj and assertObj
+(see Fig. 16).
+
+5.10.2 Communication tasks                                        Fig. 26 Three examples of BitM + window resize responsiveness. The
+                                                                  BitM + is aware of the window resize produced by the victim with the
+xssPayload--as previously mentioned--communicates with            mouse on his/her local infected browser and updates in real time the
+BE via the HTTP APIs provided by MalSrv. One of its main          window size of noVNC transmitted webpage accordingly. The data for
+tasks is to look for new chObj from BE's MalSrv by period-        window resize update are sent by xssPayload to MalSrv via /postScreen-
+ically polling it with API. When a new chObj is discovered        Size POST request. The red-bordered areas highlight the window size
+it is passed WebAuthn API's get() method. It also does the        synchronization between the BitM + in BE and the victim's browser in
+complementary task, i.e. it takes the assertObj as result of the  FE
+get() call and sends it to BE's MalSrv by using/postSolution
+with assertObj in the POST's body.
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...                      Page 23 of 26 11
+
+5.10.3 DOM defacing                                             6.1 BitM + at work
+
+xssPayload performs defacing by injecting HTML code             Once the above configuration is in place we are ready to start
+which contains the DOM ele- ment (an iframe that loads the      the BitM + attack against the victim in V. We go through
+ePage) to be overlaid (see Fig. 10) over xURL page's original   the process with the help of figures representing the different
+and legit content that--in this case--is the RP's (FIDO Site    stages of the attack. Figure 19 (stage 1) offers an overview
+Demo) login web page.                                           of the situation at the beginning of the attack. The follow-
+                                                                ing Figures in this subsection, from 18 to 24, describe the
+6 Real-world attack experiment                                  sequence of all the stages that take place until the successful
+                                                                completion of the attack.
+After describing the practical software implementation of
+the BitM + by showing its architecture, the involved tech-      6.2 Experiment observations
+nologies and the design choices, we now proceed to show
+our presented BitM + at work in a real-world scenario, in       With stage 8, the BitM + attack procedure is complete, result-
+order to demonstrate that the proposed new BitM + is not        ing in a full attacker's control of the victim's FIDO Site Demo
+only theoretically conceivable but also practically feasible    Accounts session that resides in BE's Chromium browser and
+today. We will illustrate the various steps involved in a real  is only transmitted via VNC to the victim in FE.
+attack use case that lead to a successful authentication of
+the attacker to a target FC2W-protected victim's account.          Let's note the following:
+We assume the following set-up (compatible with Scenario 3
+conditions) immediately before the beginning of the attack:     6.2.1 Native Platform WebAuthn API
+
+1. V (the FE): the victim uses Chrome browser that will         The security window showed in Fig. 14 (and also appearing
+    navigate an XSS-vulnerable RP webpage (reachable at         in Figs. 23 and 24) is originated--upon victim's infected
+    xURL). Such page will execute xssPayload that imple-        browser request--directly by the host OS in the victim's
+    ments a MitB attack.                                        machine (V) and it is not part of the transmission of the
+                                                                BitM + webview via noVNC. In fact such window in Fig. 14
+2. B (the BE): Attacker's BE machine implements and             is triggered by xssPayload in victim's browser that calls the
+    runs controlled Pup- peteer/Chromium browser instance       WebAuthn API method navigator.credentials.get(). The vic-
+    with MalSrv APIs and noVNC connection functionalities       tim's browser in turn forwards the call to the OS that is
+    (BitM +).                                                   responsible for displaying the security window.
+
+3. RP: the Relying Party server implements FC2W. In this           Moreover in the security window in Fig. 14 it is also
+    particular experiment the FIDO Site Demo login page         readable the Relying Party, that is in that figure exam-
+    (https://fido.site.demo) is targeted.                       ple is "google.com" but it can be done with the domain
+                                                                "fido.site.demo" or any target RP (Relying Party) domain
+   The versions of BE's software components used for the        which exhibits XSS attack exploitability. Such information
+attack are hereby listed:                                       comes from the string value in rpId field contained in chObj
+                                                                along with the challenge and other optional data specified by
+· Node.js v18.16.1                                              the WebAuthn API standard. This means that rpId provided
+· noVNC v1.4.0 from GitHub repository [47].                     in chObj must match the one stored inside the used victim's
+                                                                HW authenticator at the moment of registration (SC2).
+   The Node.js dependencies used by mybrowser.js in the
+BE are:                                                            We can also point out that the host OS believes that "This
+                                                                [authentication] request comes from the app'chrome.exe'
+· express: v4.18.2                                              by'Google LLC'." as it can be read from the window itself
+· puppeteer: v21.3.8                                            in Fig. 14. The referred "chrome.exe" is the infected vic-
+· puppeteer-extra: v3.3.6                                       tim's browser that is considered as trusted. So the host OS
+· puppeteer-extra-plugin-stealth: v2.11.2                       does not consider the remote BitM + (which is running on a
+                                                                Puppeteer/Chromium instance, on the attacker's BE machine
+   Puppeteer API uses and controls Chromium                     potentially inside a containerized Linux environment) as the
+v120.0.6055.0 (× 64) browser.                                   caller of the authentication but the local victim's browser
+                                                                itself (in this case Google Chrome running under Windows
+                                                                11) infected with xssPayload. This means that hardly any
+                                                                difference can be spotted by the end user between a regular
+                                                                FC2W user authentication and one under a BitM + attack,
+
+                                                                                    123
+11 Page 24 of 26                                               C. Catalano et al.
+
+Fig. 27 Overall BE/FE software
+architecture and attack procedure
+flow. Flow 1 path begins with
+victim's user credentials
+insertion on the BitM page and
+ends with chObj arrival to HW
+authenticator. Flow 2 path begins
+from chObj arrival to HW
+authenticator and the generation
+of assertObj and the terminates
+with the arrival of assertObj to
+RP server which determines a
+successful authentication on
+BE's BitM
+
+since from a graphical user experience standpoint they are     7 Future work
+indistinguishable: the security window generated by a regular
+FC2W authentication is exactly the same as the one generated   Despite the achievements of the proposed new attack, which
+under a BitM + attack and showed in Fig. 14.                   stands as a further improvement of the basic BitM idea
+                                                               covered in [9], there is room for further research and improve-
+6.2.2 BitM + webview responsiveness                            ments on phishing attacks. For example, the technology
+                                                               behind remote transmission of Web pages, currently imple-
+As already mentioned BitM + implements webview resize          mented with noVNC, might be probed to promote the
+responsiveness which enable real-time adaptation of the page   development of an even more compelling user experience
+DOM content according to the potential window resize by        with lower latency and response time to input. However, it
+the user/victim. A visual representation of such feature is    is worth noting that, at the present time, BitM + attacks also
+illustrated in Fig. 27.                                        defeats different kinds of anti-phishing AI-based approaches
+                                                               like the one proposed by C. Catalano et al. [54].
+
+123
+Defeating FIDO2/CTAP2/WebAuthn using browser in the middle ...           Page 25 of 26 11
+
+8 Conclusions                                                            Funding Open access funding provided by Università degli Studi
+                                                                         di Bari Aldo Moro within the CRUI-CARE Agreement. This work
+The research presented so far sheds light on the evolving                was partially supported by the following project: SERICS. "Security
+landscape of web secu- rity, emphasizing the vulnerabilities             and Rights In the CyberSpace--SERICS" (PE00000014) under the
+associated with the widely adopted Multi-Factor Authentica-              MUR National Recovery and Resilience Plan funded by the European
+tion (MFA) methods, specifically in the context of Browser-              Union--NextGenerationEU.
+in-the-Middle (BitM) attacks. While the FIDO2 Project,
+incorporating the CTAP2 protocol and Web Authentication                  Data availability No datasets were generated or analysed during the
+API (WebAuthn API), has stood resilient against contempo-                current study.
+rary BitM implementations, this study advances the field by
+proposing an enhanced BitM attack pattern.                               Declarations
+
+   Our work extends the applicability of BitM attacks by                 Conflict of interest The authors declare no competing interests.
+introducing a novel technical architecture that combines
+BitM with Man-in-the-Browser (MitB) techniques. This                     Ethical approval In this research, we have designed cyber attacks on
+innovative approach enables the compromise of any available              personal web account, Google account. These experiments have been
+MFA method, includ- ing FIDO2/WebAuthn solutions that                    performed against the author's accounts. All the experiments were
+rely on hardware dongles--an authentication method previ-                performed by intercepting con- fiden- tial information belonging exclu-
+ously undefeated by phishing attacks. The proposed attack is             sively to the authors of the paper. This research does not involve human
+designed to exploit vulnerabilities in web browsing security,            participants and/or animals.
+facilitated either through a malicious browser extension or
+malware installed on the client's operating system.                      Open Access This article is licensed under a Creative Commons Attri-
+                                                                         bution 4.0 International License, which permits use, sharing, adaptation,
+   A noteworthy aspect of our research is its focus on the               distribution and reproduction in any medium or format, as long as you
+communication between the Relying Party (the server pro-                 give appropriate credit to the original author(s) and the source, pro-
+viding web service account access) and the client's computer.            vide a link to the Creative Commons licence, and indicate if changes
+Rather than targeting the cryptography technology of FIDO                were made. The images or other third party material in this article are
+hardware authenticators, our BitM + attack operates on the               included in the article's Creative Commons licence, unless indicated
+WebAuthn APIs, which have become a standard in modern                    otherwise in a credit line to the material. If material is not included in
+browsers for enabling strong authentication. By focusing in              the article's Creative Commons licence and your intended use is not
+on the navigator.credentials.get() JavaScript method within              permitted by statutory regulation or exceeds the permitted use, you will
+Web Authentica- tion API, our attack demonstrates a capac-               need to obtain permission directly from the copyright holder. To view a
+ity to bypass even the most robust security protocols.                   copy of this licence, visit http://creativecommons.org/licenses/by/4.0/.
+
+   It is important to note that this work builds upon prior              References
+research [9, 10], offer- ing an evolved and more potent
+version of the BitM attack. While not undermining the inher-              1. Cyber security threat trends. (2021). https:// learn-
+ent security of FIDO hardware authenticators, the proposed                    cloudsecurity.cisco.com/umbrella-resources/umbrella/2021-
+BitM + attack exposes vulnerabilities in the communica-                       cyber-security-threat-trends-phishing-crypto-top-the-list
+tion channels crucial for the authentication process. As web
+authentication technologies continue to advance, the results              2. Sharma, A.K., Galav, R.K., Sharma, B.: A comprehensive survey
+here presented underscore the need for constant vigilance                     of various cyber attacks. In: 2023 6th International Conference on
+and iterative improvements to counter emerging threats in                     Information Systems and Com- puter Networks (ISCON), pp. 1­4
+the digital realm.                                                            (2023). https://doi.org/10.1109/ISCON57294.2023.10111998
+
+Acknowledgements This work was partially supported by the follow-         3. Patat, G., Sabt, M.: Please Remember Me: Security Analysis
+ing project: SERICS--"Security and Rights In the CyberSpace--SER-             of U2F Remember Me Implementations in The Wild (2020).
+ICS" (PE00000014) under the MUR National Recovery and Resilience              idHAL:hal-02865105
+Plan funded by the European Union--NextGenerationEU.
+                                                                          4. Ulqinaku, E., Assal, H., Abdou, A., Chiasson, S., Capkun, S.: Is
+Author Contribution The research idea, the modeling of the attack,            Real-time Phish- ing Eliminated with FIDO? Social Engineering
+the implementation of the attack was performed by Christian Catalano          Downgrade Attacks against FIDO Protocols. Proceedings of the
+and Andrea Chezzi. Testing and validation were conducted by Chris-            30th USENIX Security Symposium (2021)
+tian Catalano, Andrea Chezzi e Vita Santa Barletta. Christian Catalano,
+Andrea Chezzi and Franco Tommasi contributed equally to writing the       5. Schwartz, M., Machulak, M.: Securing the Perimeter: Deploying
+manuscript. The article was reviewed and revised by Franco Tommasi            Identity and Access Management with Free Open Source Software.
+and Vita Santa Barletta, ensuring clarity and consistency. Christian          Apress, Berkeley, CA (2018). https://doi.org/10.1007/978-1-4842-
+Catalano supervised the research, providing guidance and oversight            2601-8
+throughout the study.
+                                                                          6. Alliance, F.: Certification overview. (2022). https://fidoalliance.
+                                                                              org/ certification/
+
+                                                                          7. Microsoft: Microsoft digital defense report. (2022). https://query.pr
+                                                                              od.cms. rt.microsoft.com/cms/api/am/binary/RE5bUvv,https://qu
+                                                                              ery.prod.cms.rt.microsoft.com/cms/api/am/binary/RE5bUvv
+
+                                                                          8. M'Chirgui, Z.: The economics of the smart card industry: Toward-
+                                                                              scoopetitive strategies. Econ. Innov. New Technol. 14(6), 455­477
+                                                                              (2005)
+
+                                                                         123
+11 Page 26 of 26                                                            C. Catalano et al.
+
+ 9. Tommasi, F., Catalano, C., Taurino, I.: Browser-in-the-Middle           32. Reynolds, J., Smith, T., Reese, K., Dickinson, L., Ruoti, S., Sea-
+     (BitM) attack. Int. J. Inf. Secur. 21(2), 179­189 (2021). https://          mons, K.: A Tale of Two Studies: The Best and Worst of YubiKey
+     doi.org/10.1007/s10207-021-00548-5                                          Usability. IEEE Symposium on Security and Privacy (2018)
+
+10. Catalano, C., Tommasi, F.: Persistent MobileApp-in-the-Middle           33. Chezzi, A., Catalano, C., Tommasi, F.: Bitm+ attack: An improved
+     (MAitM) attack. J. Comput. Virol. Hack. Tech. 20(1), 27­39                  bitm/mitb- based phishing attack capable of passing through and
+     (2023). https://doi.org/10.1007/s11416-023-00484-z                          defeating the fido/ctap2 protocol and the w3c webauthn api. Mitb-
+                                                                                 Based Phishing Attack Capable of Passing through and Defeating
+11. Kepkowski, M., Machulak, M., Wood, I., Kaafar, D.: Challenges                the Fido/Ctap2 Protocol and the W3c Webauthn Api (2024)
+     with Passwordless FIDO2 in an enterprise setting: a usability study
+     (2023). arXiv:2308.08096v2                                             34. Documentation, M.-M.W.: Web authentication api. (2019). https://
+                                                                                 developer.mozilla.org/en-US/docs/Web/API/Web Authentication
+12. Client to authenticator protocol (ctap). (2021). https://fidoalliance.       API
+     org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-prot
+     ocol-v2.1-ps-20210615. html                                            35. Wikipedia contributors: WebAuthn -- Wikipedia, The Free Ency-
+                                                                                 clopedia. [Online; accessed 2023] (2023). https://en.wikipedia.org/
+13. W3C: Web authentication: An api for accessing public key creden-             w/index.php?title=WebAuthn&oldid=1180406727
+     tials level 2. https://www.w3.org/TR/webauthn-2/
+                                                                            36. GitHub - FIDO Alliance WebAuthn demo (webauthn-demo. FIDO
+14. Web authentication: An api for accessing public key credentials              Alliance (fido- alliance) (2020). https://github.com/fido-alliance/
+     level 2. (2022). https://www.w3.org/TR/webauthn-2/                          webauthn-demo
+
+15. Google: Chromium project. https://www.chromium.org/Home/                37. WebAuthn WORKSHOP: Authenticating your web like a boss.
+16. Yubico: Yubico product documentation. https://docs.yubico.com/               FIDO Alliance (2018). https://slides.com/fidoalliance/jan-2018-
+17. Feitian: Documentation resources. https://www.ftsafe.com/Supp                fido-seminar-webauthn-tutorial
+
+     ort/Resources                                                          38. GitHub - FIDO Alliance WebAuthn demo (webauthn-demo). nero-
+18. Tzschoppe, J., L¨ohr, H.: Browser-in-the-Middle - Evaluation of a            crux (2020). https://github.com/nerocrux/webauthn-demo
+
+     modern approach to phishing. EUROSEC '23: Proceedings of the           39. Corporation, M.: [ms-rdpewa]: Remote desktop protocol: Webau-
+     16th European Work- shop on System Security (2023). https://doi.            thn vir- tual channel protocol. (2022). https://learn.microsoft.com/
+     org/10.1145/3578357.3589458                                                 en-us/openspecs/windowsprotocols/ms-rdpewa/68f2df2e-7c40-
+19. Jagannath, R.O., Jain, A.K.: Browser-in-the-middle attacks: a com-           4a93-9bb0-517e4283a991
+     prehensive analysis and countermeasures. Sec. Privacy 7(5), 410
+     (2024)                                                                 40. Wikipedia contributors: Node.js -- Wikipedia, The Free Encyclo-
+20. Corinto, A.D.: Tre ricercatori italiani hanno scoperto come neu-             pedia. [Online; accessed 18-November-2023] (2023). https://en.wi
+     tralizzare l'autenticazione a due fattori. (2022)                           kipedia.org/w/index.php?title=Node.js&oldid=1185467042
+21. Browser-in-the-middle buca anche l'autenticazione a due fat-
+     tori. (2022). https://www.securityopenlab.it/news/2016/ browser-       41. Node.js: About node.js. https://nodejs.org/en/about
+     in-the-middle-buca-anche-lautenticazione-a-due-fattori.html            42. Node.js: About documentation - node.js. https://nodejs.org/en/docs
+22. Capec-701: Browser in the middle (bitm). (2023). https://capec.mi       43. Puppeteer: Puppeteer documentation. https://devdocs.io/puppet
+     tre.org/data/ definitions/701.html
+23. MITRE: Mitre web reference. https://attack.mitre.org/                        eer/
+24. Schwartz, M., Machulak, M.: Securing the perimeter - Deploying          44. Google: Welcome to chromium. https://blog.chromium.org/2008
+     Identity and Access Management with Free Open Source Soft-
+     ware (Chapter 7: Strong Authen- tication). Apress Berkeley, CA,             /09/ welcome-to-chromium 02.html
+     231­265 (2018). https://doi.org/10.1007/978-1-4842­2601­8              45. Express.js: Fast, unopinionated, minimalist web framework for
+25. Tommasi, F., Catalano, C., Corvaglia, U., Taurino, I.: MinerAlert:
+     an hybrid approach for web mining detection. J. Comput. Virol.              node.js. https://expressjs.com/
+     Hacking Tech. 18(4), 333­346 (2022). https://doi.org/10.1007/s1        46. VentureBeat: Case study: How why to build a consumer
+     1416-022-00420-7
+26. Tommasi, F., Catalano, C., Fornaro, M., Taurino, I.: Mobile                  app with node.js. https://venturebeat.com/dev/building-consumer-
+     session fixation attack in micropayment systems. IEEE Access                apps-with-node/
+     7, 41576­41583 (2019). https://doi.org/10.1109/ACCESS.2019.29          47. noVNC: novnc - the open source vnc client. https://novnc.com/
+     05219                                                                       info.html
+27. Gonzalez-Burgue, A., Aparicio, D., Escobar, S., Meadows, C.,            48. nginx: nginx. https://nginx.org/en/
+     Meseguer, J.: For- mal verification of the YubiKey and YubiHSM         49. docs, M.: The WebSocket API (WebSockets) (2023). https://deve
+     APIs in Maude-NPA (2018). arXiv:1806.07209v1                                loper.mozilla.org/en-US/docs/Web/API/WebSockets API
+28. Jacomme, C., Kremer, S.: An extensive formal analysis of multi-         50. hardock14: dorowu-docker-ubuntu-vnc-desktop. Docker Hub
+     factor authenti- cation protocols. IEEE 31st Computer Security              (2017). https://hub.docker.com/r/hardock14/dorowu-docker-ub
+     Foundations Symposium (2018)                                                untu-vnc-desktop
+29. FIDO Security Reference - FIDO Alliance Implementation Draft            51. hardock14: dorowu-docker-ubuntu-vnc-desktop. Github (2017).
+     27 February 2018. FIDO Alliance (2018). https://fidoalliance.org/           https://github.com/HarGit14/dorowu-docker-ubuntu-vnc-desktop
+     specs/fido-v2.0-id-20180227/fido-security-ref-v2.0-id-20180227.        52. Window: localStorage property. MDN web docs (2023). https://de
+     html                                                                        veloper.mozilla.org/en-US/docs/Web/API/Window/localStorage
+30. Sanam Ghorbani Lyastani, M.N.M.B. Michael Schilling, Bugiel,            53. ArrayBuffer. MDN web docs (2023). https://developer.mozilla.
+     S.: Is fido2 the kingslayer of user authentication? A comparative           org/en-US/docs/Web/JavaScript/Reference/Global.Objects/Arra
+     usability study of fido2 assword- less authentication. IEEE Sym-            yBuffer
+     posium on Security and Privacy (SP), pp 268­285 (2020)                 54. Catalano, C., Chezzi, A., Santa Barletta, V., Corallo, A.: Securing
+31. Kentrell Owens, A.K. Olabode Anise, Ur, B.: User perceptions of              web technol- ogy and navigation against phishing through cnn. In:
+     the usability and security of smartphones as fido2 roaming authen-          2023 IEEE International Conference on Metrology for eXtended
+     ticators. Seventeenth Symposium on Usable Privacy and Security              Reality, Artificial Intelligence and Neural Engineering (MetroX-
+     (SOUPS 2021) - USENIX Association, pp 57­76 (2021)                          RAINE), pp. 944­948 (2023). IEEE
+
+                                                                            Publisher's Note Springer Nature remains neutral with regard to juris-
+                                                                            dictional claims in published maps and institutional affiliations.
+
+123
+

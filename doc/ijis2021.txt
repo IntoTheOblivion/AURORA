@@ -1,0 +1,657 @@
+International Journal of Information Security (2022) 21:179­189
+https://doi.org/10.1007/s10207-021-00548-5
+
+ REGULAR CONTRIBUTION
+
+Browser-in-the-Middle (BitM) attack
+
+Franco Tommasi1 · Christian Catalano1 · Ivan Taurino1
+
+Published online: 17 April 2021
+© The Author(s) 2021
+
+Abstract
+Man-in-the-Middle (MitM), one of the best known attacks in the world of computer security, is among the greatest concerns
+for professionals in the field. Main goal of MitM is to compromise confidentiality, integrity and availability of data flowing
+between source and destination. However, most of its many variants involve difficulties that make it not always possible. The
+present paper aims at modelling and describing a new method of attack, named Browser-in-the-Middle (BitM) which, despite
+the similarities with MitM in the way it controls the data flow between a client and the service it accesses, bypasses some
+of MitM's typical shortcomings. It could be started by phishing techniques and in some cases coupled to the well-known
+Man-in-the-Browser (MitB) attack. It will be seen how BitM expands the range of the possible attacker's actions, at the same
+time making them easier to implement. Among its features, the absence of the need to install malware of any kind on the
+victim's machine and the total control it allows the attacker are to be emphasized.
+
+1 Introduction                                                      A typical scenario for this kind of attack involves: two
+                                                                 endpoints (the victims), a third-party (the attacker) and a
+One of the best known and most used attacks in the               communication channel. The attacker can access the commu-
+cyberspace is the Man-in-the-Middle (MitM) attack. The           nication channel and can intercept and manipulate messages
+term MitM identifies a large category of attacks whose           sent or received by both endpoints. Figure 1 sketches the
+main characteristic is the ability of the attacker to place      basic concept.
+him/herself, in many different ways, in a point of the path
+between the victim and the accessed service. MitM attacks           The wide variety of existing MitM attacks bears witness to
+have been described for practically any kind of communi-         the popularity of the category. As examples of popular MitM
+cation technology: LTE (Long-Term Evolution), Bluetooth,         attacks aimed at web services, MitB[3,9,10], MitM to the
+NFC (Near Field Communication), IoT, WiFi, HTTPS pro-            HTTPS Protocol[4], DNS Hijacking[11] may be mentioned.
+tocol, operating system processes, etc.[1­8].
+                                                                    Despite their popularity, MitM attacks are not easy to put
+   MitM attacks aim at compromising:                             into practice. They can be carried out either by exploiting
+                                                                 zero-days, known vulnerabilities and weaknesses in one of
+ ­ Confidentiality, by eavesdropping on the communication.       the two end-points and/or in the communication channel or
+ ­ Integrity, by intercepting the communication and modi-        by getting a physical access to the latter.
+
+    fying messages.                                                 While belonging to the same category, Browser-in-the-
+ ­ Availability, by intercepting and destroying messages or      Middle (BitM), the attack here presented, has no such
+                                                                 requirements. Moreover, it is relatively easy to implement
+    modifying messages to cause one of the parties to end        and scalable through phishing techniques. It also allows real-
+    communication.                                               time monitoring of the victims' behaviour during their web
+                                                                 navigation and tampering with exchanged data.
+B Franco Tommasi
+                                                                    In its essence, it is pursued by substituting the victim's
+     francesco.tommasi@unisalento.it                             browser with a malicious transparent browser, hosted on the
+                                                                 attack platform, that the attacker is able to control in every
+     Christian Catalano                                          way, leaving the victim totally unaware of the substitution.
+     christian.catalano@unisalento.it                            At its root is a careful use of RFB, the protocol basic to the
+                                                                 better known VNC (Virtual Network Control) applications.
+     Ivan Taurino
+     ivan.taurino@unisalento.it
+
+1 Dipartimento di Ingegneria dell'Innovazione, University of
+     Salento, Via per Monteroni, Lecce, Italy
+
+                                                                 123
+180                                                                                                     F. Tommasi et al.
+
+Fig. 1 Man-in-the-Middle (MitM)                                    Fig. 3 Browser-in-the-Middle (BitM)
+
+Fig. 2 Man-in-the-Browser (MitB)                                   covered among Russian Facebook users in 2015, and later
+                                                                   reported in France, EKO is a malware spread through the
+2 Related work                                                     Facebook social network.
+
+To set the stage for the presentation of BitM, it may be use-         The victim receives a direct message from someone
+ful in this section to focus attention on a family of variants     already compromised among his/her contacts. Such message
+of MitM, the Man-in-the-Browser (MitB) attack [3,9,10].            contains a link pointing at a fake YouTube video. When the
+In the following section, the differences between MitB and         victim clicks on the link, a fake YouTube is presented, asking
+BitM will be highlighted. In a MitB attack, a web-based            to install an extension to reproduce the video. Actually, the
+Trojan malware[12,13] is injected in the victim's browser          extension contains the EKO malware and it is installed inside
+which allows to intercept any communication between the            the victim's browser. Once installed the extension connects
+user and his/her target sites and to tamper with it. The web-      to a Command & Control (C&C) server and gets from it a
+based malware is programmed to become active when the              GitHub link from where the virus code is downloaded.
+user accesses specific Internet sites, e.g. online banking sites.
+Figure 2 sketches the idea at its base.                               The users begin to receive undesired advertisements or,
+                                                                   even worst, EKO is able to spy on the user's behaviour and
+   Once active, a MitB web-based Trojan malware is able            to gather his/her personal data, home banking ones included.
+to intercept and modify in real time all data exchanged. A         Eventually, the infected users become themselves a vehicle
+number of Trojan families have been identified along the           for the infection by sending malicious links to all the users
+years. Zeus[14], Adrenaline, Sinowal[15], Silent Banker[16],       in their contact list.
+Eurograbber[17] and EKO[18] may be quoted among them
+[9].                                                                  In short, all the MitB attacks have the target of com-
+                                                                   promising the victim browser by a Trojan malware and
+   Some of them are very sophisticated and succeeded in            of intercepting, record and manipulate all communications
+simplifying the fraudulent activities. In fact, they can be pro-   between the user and a number of his/her contacted sites.
+grammed to completely automate the process beginning with
+the infection and ending with the money withdrawal.                3 Browser-in-the-Middle (BitM) attack
+
+   To better understand the MitB attack dynamic, a brief           An overview of the Browser-in-the-Middle (BitM) attack will
+description of a recent example of an attack engineered            be provided in the present section. The following section will
+through the EKO malware will be provided. Initially dis-           provide a detailed description of the techniques used.
+
+                                                                      The idea at the base of BitM is to interpose a malicious
+                                                                   transparent browser between the victim's browser and the
+                                                                   web server the victim is accessing to obtain a service (e.g. a
+                                                                   banking service, a social network, etc.). The purpose of the
+                                                                   interposition is to intercept, to record and to manipulate any
+                                                                   data exchange between the victim and the service provider.
+                                                                   Figure 3 illustrates the basic concept, and Fig. 4 details a
+                                                                   possible attack scenario.
+
+                                                                      The involved parties are:
+
+123
+Browser-in-the-Middle (BitM) attack                                                                                                          181
+
+                                                                  matter which security protocols the web application has
+                                                                  set up. The victim will be able to navigate through all
+                                                                  application's functionalities by a browser which, unbe-
+                                                                  known to him/her, is connected to the malicious server.
+
+                                                                  4 BitM platform architecture and
+                                                                    implementation
+
+Fig. 4 Browser-in-the-Middle (BitM)                               In the present section, the architecture and the implementa-
+                                                                  tion of the BitM platform (that is a prototypal attack platform
+ ­ The Attacker: a computer criminal aiming at violating the      acting as the malicious server) will be described.
+    victim's privacy together with confidentiality, integrity
+    and availability of the data exchanged by the two end-           The basic idea is to serve the victim a web browser encap-
+    points. The attacker sets up and controls a malicious         sulating a web page, looking and behaving exactly as the
+    server which serves a transparent web browser to the end      desired web page of the target site. By his/her browser the
+    user.                                                         victim will be able to navigate the target web application
+                                                                  while actually unwittingly using of a transparent web browser
+ ­ The Victim: a user lured through phishing techniques[19,       exposed by the malicious web server.
+    20], into accessing the malicious server (hosting a trans-
+    parent web browser) set up by the attacker and into using        For the attack platform, an easily customizable operating
+    a web application.                                            system was preferred. The malicious server was set up with
+                                                                  a GNU/Linux distribution featuring a light window manager
+ ­ The Target: a web application able to provide sensi-           based on Fluxbox[21] to minimize the GUI of the window
+    tive and/or valuable services (e.g. banking services, mail    containing the malicious web browser which will be exported
+    services, etc.) accessed through an authentication mech-      in the victim's web browser. The malicious web browser
+    anism.                                                        Chromium[22] was also customized to avoid any kind of
+                                                                  frame.
+   The following steps summarize the BitM attack technique:
+                                                                     The BitM attack platform was equipped with a VNC (Vir-
+1 The attacker sets up a forged hyperlink pointing to the         tual Network Computing)[23] server (vncserver in our case,
+    malicious server. The link is sent to the victim who is       [24]). VNC is a generic name for a type of programs allowing
+    lured through phishing techniques into clicking it and        the remote control of the GUI of a computer. Such programs
+    into authenticating in the web application;                   are based on the use of the RFB (Remote Frame Buffer) pro-
+                                                                  tocol. The RFB protocol states the rules by which a client (the
+2 By clicking on the malicious hyperlink in his/her own           controlling machine) and a server (the controlled machine)
+    browser, the victim will unwittingly be connected to          can establish and manage a remote control session through a
+    the malicious server where a transparent web browser          network[25].
+    is residing, together with a number of programs (e.g.
+    web proxy, sniffer, keylogger, add-ons, etc.) the attacker       Another important part of the picture is noVNC[26].
+    will use to intercept, record and manipulate the data            noVNC is a piece of software essentially made of two
+    exchanged by the victim and the target web application.       parts:
+
+3 The malicious server will access the target web applica-         ­ The client part, which is downloaded through the mali-
+    tion (e.g. a banking application, a social network, etc.)         cious link and is executed by the victim browser automat-
+    through the malicious web browser a totally transpar-             ically without user interactions (it requires just a browser
+    ent way. At this point the victim will be able to use all         with HTML5 support; therefore, it works on all major
+    the target application functionalities (plus the ones the         browsers);
+    rogue server is now able to offer in addition). All the vic-
+    tim's operations may now be intercepted and therefore          ­ The server part, which must be installed on the attack
+    recorded and manipulated by the attacker. As an exam-             platform.
+    ple, the attacker will be able to intercept the credentials
+    provided by the victim in some authentication form, no        The client part is made of a collection of JavaScript which
+                                                                  interpret the HTML5 code coming from the server, open a
+                                                                  WebSocket [27] channel to the server and send VNC binary
+                                                                  requests through it.
+
+                                                                     The server part takes care of serving the required HTML5
+                                                                  code and runs Websockify (formerly named wsproxy).[28]
+
+                                                                                                    123
+182                                                                F. Tommasi et al.
+
+Websockify is a piece of software acting as an intermediary
+between the WebSocket channel and the actual VNC TCP
+socket on the machine. It begins by accepting the WebSocket
+handshake sent by the noVNC client, and from then on it
+translates the VNC traffic, keeping the VNC client and server
+in touch.
+
+   To allow the victim the access to the BitM attack platform
+through a web browser and to serve it the JavaScript and the
+HTML5 code, a minimal web server is obviously needed on
+the server (Python BaseHTTPServer caldav[29]). The served
+HTML5 code exploits canvas tag features in order to display
+remote screen content and handle keyboard/mouse events.
+
+   All in all, the above collection of software allows the
+victim browser to access the malicious browser running on
+the BitM platform. In other words, a VNC connection via a
+JavaScript/HTML5-based VNC viewer that does not require
+any additional software for the victim is established from
+his/her browser which allows him/her to see the malicious
+browser as if it were the target site without realizing, it is in
+fact a "browser inside a browser".
+
+   It is worth emphasizing that the proposed architecture only
+includes open-source technologies.
+
+   Figure 5 outlines the BitM attack platform blocks and their
+logical connection.
+
+   For the sake of clarity, let us concisely review the steps
+involved in the attack:
+
+1 The victim accesses the server's malicious URL.                  Fig. 5 Attacker's platform
+2 The malicious server, contacted at the malicious URL,
+                                                                       the eavesdropping (and, possibly, the manipulation of the
+   sends JavaScript code to the client (this is what we call           traffic).
+   "the noVNC client").
+3 The victim's JavaScript code starts (through the HTTP            5 Possible BitM attacks
+   channel) a WebSocket connection.
+4 The malicious web server accepts the client's request of         By controlling the malicious server and the noVNC client
+   WebSocket connection and turns the WebSocket traffic            served to the victim, the attacker can now start a variety of
+   to Websockify.                                                  attacks. For the sake of simplicity, the attack strategies will
+5 The victim's JavaScript code starts a VNC dialogue               be divided in two categories, Passive BitM and Active BitM:
+   (which travels on the WebSocket connection) with a VNC
+   server on the attacker's platform.                               ­ Passive BitM: this category includes all techniques exclu-
+6 Websockify on the attacker's platform forwards the VNC               sively aimed at data gathering (obviously the recorded
+   requests coming from the WebSocket channel to the                   data can be freely used later). The attacker can in fact
+   actual VNC server TCP socket on the same platform.                  closely examine in real time all the victim's actions
+7 The server sends back the VNC response through the                   during the navigation in the target web app and record
+   WebSocket channel, together with HTML5 code (includ-                the entire session. A keylogger[30] can easily be posi-
+   ing the <canvas> tag). With the help of the client's                tioned in the malicious web browser to record keystrokes
+   JavaScript, the web server exposes a web page set up                (e.g. for usernames, IDs and passwords). By a web-
+   to encapsulate the page at the URL the victim originally            proxy[31] or suitable add-ons installed in the malicious
+   tried to access and therefore being the legitimate one (and
+   looking exactly the same).
+8 The victim will now enter the credentials in such page,
+   allowing the attacker to intercept the traffic and to steal
+   them. At the same time it will use them in the legitimate
+   site to allow the victim's access to it and to continue
+
+123
+Browser-in-the-Middle (BitM) attack                              183
+
+   web browser, all the traffic (e.g. session cookies) can also
+   be recorded.
+­ Active BitM: this category includes all techniques used to
+   actively modify the traffic exchanged between the victim
+   and the target web application. What the victim is sup-
+   posed to see in the original target can be altered in many
+   ways by the malicious server which is actually serving the
+   requested page. Moreover, by the web proxy and the add-
+   ons, all types of web-based malware exploiting known
+   vulnerabilities for the victim's browser can be injected
+   into it.
+
+   According to the attack goals and to the selected victim,
+the attacker may choose to install malicious software either
+on the client side or on the server side.
+
+ ­ BitM client-side: in this case the attacker may insert mali-  Fig. 6 Possible malicious software to profit from a BitM attack
+    cious JavaScript code or web-based malware[32] in the
+    web page served to the victim (the end user). By such        6 BitM vs MitM
+    an approach, for example, an attack might be arranged
+    along the lines of the Man-in-the-Browser (MitB) attack      It may be worth stressing the point discussed in the follow-
+    described in the "Related Work" section: the victim might    ing. In principle, Browser in the Middle (BitM) and Man in
+    be lead to download all kinds of malware to be installed     the Middle (MitM) attacks are similar in that they control
+    in the web browser or, more simply, to deceptively use       the data flow between the victim's computer and the target
+    a Browser Exploitation Framework (BeeF)[33,34]. In           service. However, a clear distinction must be drawn between
+    practice all kinds of client-side attacks might be imple-    the two attacks: although both may be started by a phishing
+    mented.                                                      technique, a MitM attack uses a proxy server which relays
+                                                                 traffic and places itself at the application layer between the
+ ­ BitM server-side: in this case the attacker may install       victim's browser and the legitimate target service. To make
+    malicious software in the server. For example, keylog-       this type of attack possible, some sort of malware must be
+    ging Chrome add-ons (e.g. Fea KeyLogger)[35] might be        run on the victim's computer. On the contrary, a BitM attack
+    used. Also add-ons able to execute JavaScript code on        needs no such software. The victim navigates with his/her
+    the browser side might be installed, in order to modify      browser as usual but, in fact, he/she is unknowingly running
+    the input on the fly (e.g. Violentmonkey)[36]. It would      a remote browser transparently displayed into the browser's
+    also be possible to install on the malicious server a web    window, so that he/she sees exactly what expected. It is as
+    proxy (e.g. Burp proxy)[37] to sniff all the traffic gener-  if, so to speak, he/she were sitting in front of the attacker's
+    ated towards the target by the malicious BitM platform       computer using the attacker's keyboard. At this point, with
+    and to redirect when required.                               little effort, the attacker can capture, record, alter the data
+                                                                 exchange between the victim and the service provider. Fig-
+   To sum up, since this attack technique gives the attacker     ure 3 illustrates the basic concept.
+full control both over the malicious server and over the
+HTML and JavaScript pages served to the victim, once the
+victim has become entangled, the types of possible exploits
+are only limited by the attacker creativity.
+
+   It is worth noting the attack here described is scalable,
+easily replicable and hardly detected by a common user.
+By it criminals will no more need to mimic the target web
+applications. They will simply need to add software and func-
+tionalities to the malicious server, by which they will be able
+to directly exploit the services offered by the targets.
+
+   Figure 6 shows the possible insertions of malicious soft-
+ware the attacker may execute to steal useful information
+from the victim.
+
+                                                                 123
+184                                                                                     F. Tommasi et al.
+
+7 BitM experimental results
+
+In this section the results of an experiment executed by         Fig. 7 Malicious link
+the Telegram web application[38] (desktop version) will be
+reported.
+
+   The Telegram web application was selected for the exper-
+iment because it allows authentication only by a login code
+sent through SMS or Telegram message to the mobile device
+(a sort of two factors authentication).
+
+   The same experiment may be tried with any web appli-
+cation requiring some form of two factors authentication
+(Gmail, Facebook, web banking, etc.). The scenario is the one
+described in the "Browser-In-The-Middle (BitM) Attack"
+section.
+
+   The testbed is set up as follows:
+
+ ­ Victim's PC: through social engineering techniques (e.g.      Fig. 8 Telegram authentication page step 1
+    by phishing techniques) the victim is led to access the
+    Telegram web platform by the browser on a desktop com-       Fig. 9 Telegram authentication page step 2
+    puter. The victim workstation's IP address is in our case
+    10.0.12.32.                                                     After clicking on the malicious link, the victim is redi-
+                                                                 rected to the attacker platform http://10.0.12.173:6080,
+ ­ Attacker's platform: the attack platform is set up and        which exposes the transparent browser and starts the web
+    equipped with the software described in Sect. 4. Its IP      Telegram authentication process, as shown in Figs. 8 and 9.
+    address is 10.0.12.173. While for convenience the plat-
+    form is physically located in the same subnet the victim's,     At this point, the victim receives on the open Telegram
+    it can be located everywhere, without any loss of the func-  application (wherever it runs) the login code from Telegram
+    tionalities here described, as long the victim can access    and completes the authentication. After that the victim is
+    it.                                                          allowed the access to his/her account.
+
+ ­ Web application target: the Telegram web application,            As demonstrated in Fig. 10, the victim is in fact visual-
+    accessible through a normal browser, has been selected       izing a web page shown by the attacker platform. The word
+    as the target. It is assumed the victim owns an active       "noVNC" has intentionally been left as the window's title to
+    account within the selected application. Although Tele-      demonstrate the victim is actually seeing an HTML5 canvas
+    gram was selected on account of being a very popular         (containing the transparent browser set up by the attacker)
+    application and allowing fast and easy tests, it must be     and everything the victim types in is captured by the attacker.
+    stressed the method here introduced applies exactly in the
+    same way to any web application based on a two-factor           As usual, the password provided by the victim is hidden
+    authentication procedure (Gmail, Facebook, etc.).            from the view of the observer; therefore, a simple attack based
+
+   As highlighted in Fig. 7, an user receives a malicious link
+by any kind of phishing technique. Admittedly, using the
+Telegram application to send and receive the malicious link
+for the same (Telegram) web application, makes little sense.
+The choice was made anyway for two reasons:
+
+ ­ the way the fake link is received is irrelevant and using
+    Telegram for that purpose does not imply any loss of
+    generality: the attack conceptual framework is totally
+    unaffected in case the link is sent by mail or by any type
+    of messaging platform (WhatsApp, Facebook Messen-
+    ger, etc.);
+
+ ­ the use of Telegram to send and receive the malicious
+    link allowed to speed up the testing procedures.
+
+123
+Browser-in-the-Middle (BitM) attack                                                                                                       185
+
+Fig. 10 Victim is visualizing a web page shown by the attacker platform
+                                                                                           Fig. 12 User is visualizing Telegram web page
+
+Fig. 11 Attacker is capturing every activity of the victim on his/her
+machine
+
+on watching in real time the typed characters and taking note          Fig. 13 User is visualizing Telegram web page shown by the attacker
+of the inserted password is not possible. However, a simple            platform
+workaround is the installation of a keylogger on the attacker
+browser (a Chrome add-on in the test here described [32]).             visual clue (the two black sidebars) has been intentionally
+By that, anything the victim types (passwords, PINs, etc.)             left in the fake page to denote its spurious nature. The dif-
+can be captured and securely stored.                                   ferences between the two are indicated by their inclusion in
+                                                                       red rectangles. They are not easy to spot for an inexpert user
+   Figure 11 demonstrates how the attacker succeeds in see-            (e.g. an IP address is shown in the address field, instead of
+ing and capturing every activity of the victim on his/her              web.telegram.org). Moreover, a few, probably most, of them
+machine.                                                               can be fixed.
+
+   By controlling the malicious server and the noVNC client               Another view of the differences between the two pages
+served to the victim, the attacker can now start any of the            can be obtained by a browser's developer tools (Figs. 14 and
+attacks listed in Sect. 5. In the experiment here described, a         15 show them in Firefox). Although the differences are now
+Passive BitM attack was carried on by installing a Chrome              plainly visible (note for example the canvas tag in figure 15),
+Keylogger Extension on the attacker server.                            they are likely to be noticed only by the most experienced
+                                                                       users (as most users are not even aware of the existence of
+   As the simple example here documented demonstrates, it              such tools).
+was possible to carry on a successful attack without exploit-
+ing zero-day or any other known vulnerability at the two
+end-points (the victim PC and the Telegram web application)
+or in the communication channel. Also the attack was entirely
+conducted by a remote location, simply by an improper use
+of known technologies.
+
+7.1 Genuine telegram vs fake telegram
+
+To underline the potential of the attack, the true Telegram
+web page and the fake Telegram page served by the attacker
+are shown together in Figs. 12 and 13. An easily removable
+
+                                                                                                                                          123
+186                                                                                                                                   F. Tommasi et al.
+Fig. 14 User is visualizing Telegram web page with Firefox dev tool
+                                                                        It should be clear that the two techniques are not mutually
+                                                                     exclusive and that they could be combined to enhance the
+                                                                     attack's chances of success. In the following, a possible way
+                                                                     of interaction between the two will be described. A BitM
+                                                                     attack may be arranged in order to exactly identify the vic-
+                                                                     tim's browser type (e.g. the browser name and its version).
+                                                                     Once a malware which is known to affect that particular ver-
+                                                                     sion of the browser is found, the same BitM is used to upload
+                                                                     the malware on the victim's host. After that, the usual MitB
+                                                                     attack is carried on, with both the victim and the host web
+                                                                     application unaware of it.
+
+                                                                        The definition of APT (Advanced Persistent Threat)[41]
+                                                                     refers to "an entity that engages in a malicious, organized, and
+                                                                     highly sophisticated long-term or reiterated network intru-
+                                                                     sion and exploitation operations to obtain information from
+                                                                     a target organization, sabotage its operations, or both". With
+                                                                     such description in mind, one can definitely state that a BitM
+                                                                     infrastructure may be part of a set of tools used to mount
+                                                                     an APT. A possible attack scenario might be the following:
+                                                                     an entity is able to exploit some vulnerability of a specific
+                                                                     browser or webkit used by a few browsers, which, as an
+                                                                     example, allows to compromise the DNS cache. When a user
+                                                                     tries to navigate to a specific URL, it might be automatically
+                                                                     and constantly readdressed to a BitM attack platform which
+                                                                     might harvest users' credentials. In such sense, it could be
+                                                                     argued that a BitM attack backed by an MitB attack is in fact
+                                                                     an APT.
+
+Fig. 15 User is visualizing Telegram web page shown by the attacker  9 Limits and constraints
+platform with Firefox dev tool
+                                                                     It is most appropriate to state here clearly that the purpose of
+8 MitB and BitM                                                      the present paper is to provide a PoC (Proof of Concept) for
+                                                                     the BitM attack and not to design, describe and implement a
+As pointed out in a previous section, Man-in-the-Browser             weaponized attack BitM infrastructure/platform. Also, it can
+type attacks (MitB)[3,9,10] are a form of Internet threat            be easily seen that, as it is proposed here, the attack is mainly
+related to the well-known Man-in-the-Middle (MitM) attack.           effective when addressed to a specific target. Although the
+It combines the use of phishing approaches[39,40] with               attack is indeed scalable, for its use on a larger scale a deeper
+a Trojan horse technology to modify the web pages, the               analysis of a few potential problems is advisable.
+transactions' content and to insert additional transactions.
+Everything is done with both the victim and the host web                In the evaluation of its limits and constraints, the following
+application left totally unaware of the exploit.                     points might be considered:
+
+   Conversely, the BitM attack here described is conducted            ­ High Network Latency: while an high network latency
+having the victim connecting to an attack platform hosting a             may potentially interfere with any kind of attack, it
+browser. The browser can be set up to modify the visited web             may be argued BitM is especially damaged by such
+pages, the transactions content and to insert new additional             an unfavourable condition, mainly because of the larger
+transactions. In this case, however, there is no need to identify        amount of data it needs to exchange to be carried on. To
+vulnerabilities of any kind to launch the attack. Also, in this          avoid the risk of launching an unsuccessful attack, the
+case, the malicious browser is totally transparent both for the          intruder might therefore silently gauge beforehand the
+victim and the host web application.                                     connection speed and redirect the victim to the authentic
+                                                                         web site when the speed is reckoned to be insufficient. It
+                                                                         also worth considering a few studies aimed at improving
+
+123
+Browser-in-the-Middle (BitM) attack                               187
+
+    performances of VNC servers in high latency networks          tials plus a code received by any other means, but only when
+    [42].                                                         the code is required just for the first access, e.g. in Telegram)
+ ­ Device compatibility: Problems could also arise from           are easily attacked through the method here described.
+    the heterogeneity of the victims' devices (e.g. the server
+    might set up the attack assuming the victim is using a           From the user's point of view, that is from the client side,
+    desktop computer browser while the victim is actually         the best practice to avoid such attacks is to put extreme care
+    using a mobile device browser). Again, to minimize the        in identifying the target web page, by one of the many ways
+    risk of launching an unsuccessful attack, the intruder        systems use to allow a preview of the address before clicking
+    should check the victim's browser before launching the        on an URL (e.g. many systems allow reading when hovering
+    attack.                                                       over a link with the mouse pointer) and, after that, carefully
+ ­ Scalability: The attacker must beforehand decide which         checking the URL when it appears in the address field of the
+    is the legitimate site whose credentials wishes to har-       browser.
+    vest. After that, a suitably prepared link is spread by
+    phishing techniques. In this sense the attack is definitely      On the server-side (i.e. the side of the exposed web appli-
+    scalable. That is, as usual, a percentage of the contacted    cations) an established method, especially in the banking
+    users will follow the link and possibly become victims of     field, is two-step authentication with a mobile app devel-
+    the attack, thus leading, in the most basic example, to a     oped on purpose by the service provider. The app is freely
+    massive harvesting of credentials. Because BitM allows        made available to the user, who must prove, with one of
+    many users to be connected to the attacker's platform at      many one-time methods, his/her identity to be able to fully
+    the same time, it is indeed a scalable attack. For that very  configure it on a mobile device. Once the app is installed,
+    reason, it must be made clear its scalability is closely      the user may access the application web site and, after a sim-
+    related to the scalability of the attacker's platform (web    ple username/password authentication procedure the mobile
+    and VNC servers, both hardware and software) and to           application receives a confirmation request to be accepted
+    the bandwidth of its connection. This said, it must be        through the mobile device, in one of many possible ways
+    made clear the present study did not actually experiment      (Touch ID, Face ID, another password, etc.) Since the verifi-
+    the scalability of the attack (not an easy task anyway, for   cation is sent through a different channel, the attacker cannot
+    the obviously dangerous legal implications): once again,      capture it and the entire transaction is secured. The only draw-
+    what the present paper wishes to propose is a proof of con-   back of such defence is the need of a special mobile app for
+    cept, that is the demonstration that the described attack     each needed web service. It is therefore very likely some of
+    is perfectly possible.                                        the services needed by each user will remain without protec-
+                                                                  tion.
+10 Ethics
+                                                                     It is the opinion of the authors that the best deterrent
+In conducting the present research, we followed the guide-        against attacks like the one this paper describes is a feature
+lines of the ethics committee of the University of Salento. All   all browsers' developers should implement: the notification
+experiments have been performed against our own accounts,         of the use of WebSocket by a web site or application and
+and no other user of the involved platforms was involved          the possibility for a user to choose whether to continue the
+in our attacks. Even though the attack technique described        navigation or to stop it. Blocking the setup of a WebSocket
+in this paper is completely general and not restricted to a       channel would in fact prevent the operation of the noVNC
+specific web service, web application or client, according to     client, thus thwarting the entire attack. Obviously a warning
+the principle of responsible disclosure, we have reported a       would not prevent the victim from authorizing the set up.
+description of our attack and a notice about its effectiveness    Nonetheless, it could contribute to raise the his/her level of
+to the security centre of the main browsers' vendors, to the      attention.
+Telegram messaging service security centre, and to the CERT
+Coordination Center.                                              12 Future developments
+
+11 Countermeasures                                                The above described technique is subject to further refine-
+                                                                  ments. One of the possible developments is the exposure to
+The present study shows not only username/password authen-        the view of the victim (the user of a mobile device) of a
+tication procedures are easily overcome but also some kind of     mobile application instead of the transparent browser. Such
+two-factor authentication procedures (e.g. the usual creden-      a variation may be named Mobile-Application-in-the-Middle
+                                                                  (MAitM) attack.
+
+                                                                     The desired effect is that of mimicking the usual opening
+                                                                  of some mobile apps after clicking on a link in a mobile
+                                                                  browser (YouTube, Amazon Mobile, etc.) The attack would
+
+                                                                  123
+188                                                               F. Tommasi et al.
+
+Fig. 16 Mobile-Application-in-the-Middle (MAitM)                  cyber defence professionals with new insights and incident
+                                                                  analysis tools.
+be based on serving the victim with a web page pointing
+to the target site and disguised as a mobile application. The        It has also been shown how combining BitM and MitB
+victim would then experience the familiar GUI of a mobile         attack techniques can be used to attack a user not sufficiently
+app.                                                              aware of the dangers entailed by web navigation.
+
+   To achieve the desired effect above described, the attack         A further variation, the MAitM attack, has been hinted.
+platform could be set up in two alternative and equivalent        The authors plan to thoroughly investigate in the near future.
+ways:
+                                                                     Finally, an easy-to-implement countermeasure has been
+ ­ mobile platform attack: a mobile device is used (e.g. an       proposed which might help the users to better detect mali-
+    Android device) where to install and customize all the        cious sites.
+    technological stack described in Sect. 4.
+                                                                  Funding Open access funding provided by Università del Salento
+ ­ apk platform attack: the platform described in Sect. 4         within the CRUI-CARE Agreement.
+    could be enhanced to run .apk apps [43].
+                                                                  Declarations
+   To test the technique, the second method has been used.
+The malicious server was set up to execute .apk applica-          Human participants and/or Animals In this research, we have designed
+tions and, in the same way described for the basic form of        cyber attacks on personal banking websites, Telegram and Google
+the attack, to lure the victim into unwittingly executing the     account. These experiments have been performed against the author's
+application within the browser of his/her mobile device.          bank accounts. All the experiments were performed by intercepting con-
+                                                                  fidential information belonging exclusively to the authors of the paper.
+   Figure 16 illustrates the basic concept.                       This research does not involve human participants and/or animals.
+   It could be implemented by setting up a mobile device as
+the malicious server and by customizing the Android system        Open Access This article is licensed under a Creative Commons
+to install the mobile application to be exported in the victim's  Attribution 4.0 International License, which permits use, sharing, adap-
+web browser.                                                      tation, distribution and reproduction in any medium or format, as
+   A number of laboratory tests have been carried on by the       long as you give appropriate credit to the original author(s) and the
+authors with Anbox[44]. Anbox is a fairly new tools that acts     source, provide a link to the Creative Commons licence, and indi-
+as a layer between Linux distribution and native Android          cate if changes were made. The images or other third party material
+apps. It allows to use many apps as though they were running      in this article are included in the article's Creative Commons licence,
+natively on your machine. While Anbox is still in the early       unless indicated otherwise in a credit line to the material. If material
+stages of development, it has been still possible to set it up    is not included in the article's Creative Commons licence and your
+well enough to prove the concept. Further experiments are         intended use is not permitted by statutory regulation or exceeds the
+in progress to better evaluate the actual impact of such a        permitted use, you will need to obtain permission directly from the copy-
+technique on the users.                                           right holder. To view a copy of this licence, visit http://creativecomm
+                                                                  ons.org/licenses/by/4.0/.
+13 Conclusions
+                                                                  References
+The present paper aimed at demonstrating how common
+two-step authentication mechanisms implemented by the              1. Conti, M., Dragoni, N., Lesyk, V.: A survey of man in the middle
+overwhelming majority of web applications can easily be                attacks. IEEE Commun. Surv. Tutor. 18(3), 2027­2051 (2016)
+overcome by the BitM attack here described and at providing
+                                                                   2. Mallik, A., Ahsan, A., Shahadat, M., Tsou, J.: Man-in-the-middle-
+                                                                       attack: understanding in simple words. Int. J. Data Netw. Sci. 3(2),
+                                                                       77­92 (2019)
+
+                                                                   3. Dougan, T., Curran, K.: Man in the browser attacks. Int. J. Ambient
+                                                                       Comput. Intell. (IJACI) 4(1), 29­39 (2012)
+
+                                                                   4. Callegati, F., Cerroni, W., Ramilli, M.: Man-in-the-middle attack
+                                                                       to the HTTPS protocol. IEEE Secur. Priv. 7(1), 78­81 (2009)
+
+                                                                   5. Sun, D.Z., Mu, Y., Susilo, W.: Man-in-the-middle attacks on Secure
+                                                                       Simple Pairing in Bluetooth standard V5. 0 and its countermeasure.
+                                                                       Pers. Ubiquitous Comput. 22(1), 55­67 (2018)
+
+                                                                   6. Rupprecht, D., Kohls, K., Holz, T., Pöpper, C.: Breaking LTE on
+                                                                       layer two. In IEEE Symposium on Security and Privacy (SP) (2019)
+
+                                                                   7. Navas, R.E., Le Bouder, H., Cuppens, N., Cuppens, F., Papadopou-
+                                                                       los, G.Z.: Do not trust your neighbors! A small IoT platform
+                                                                       illustrating a man-in-the-middle attack. In international conference
+                                                                       on Ad-Hoc networks and wireless (pp. 120-125). Springer, Cham
+                                                                       (2018)
+
+                                                                   8. Bui, T., Rao, S.P., Antikainen, M., Bojan, V.M., Aura, T.: Man-
+                                                                       in-the-machine: exploiting ill-secured communication inside the
+
+123
+Browser-in-the-Middle (BitM) attack                                        189
+
+     computer. In 27th USENIX security symposium (USENIX Secu-             39. Utakrit, N.: Review of browser extensions, a man-in-the-browser
+     rity 18) (pp. 1511-1525) (2018)                                            phishing techniques targeting bank customers. In proceedings of
+ 9. Ayyagari, K.S.A.: Man in the browser attacks (2017)                         the 7th Australian information security management conference
+10. Rauti, S., Leppänen, V.: Browser extension-based man-in-the-                (2010)
+     browser attacks against Ajax applications with countermeasures.
+     In proceedings of the 13th international conference on computer       40. Cain, C.: Analyzing Man-in-the-Browser (MITB) Attacks. SANS
+     systems and technologies (pp. 251-258). ACM (2012)                         Institute, Bethesda (2014)
+11. Marrison, C.: Understanding the threats to DNS and how to secure
+     it. Netw. Secur. 2015(10), 8­10 (2015)                                41. Ahmad, A., Webb, J., Desouza, K.C., Boorman, J.: Strategically
+12. Chang, J., Venkatasubramanian, K.K., West, A.G., Lee, I.: Ana-              motivated advanced persistent threat: Definition, process, tactics
+     lyzing and defending against web-based malware. ACM Comput.                and a disinformation model of counterattack. Comput. Secur. 86,
+     Surv. (CSUR) 45(4), 49 (2013)                                              402­418 (2019)
+13. Provos, N., McNamee, D., Mavrommatis, P., Wang, K., Modadugu,
+     N.: The ghost in the browser: analysis of web-based malware. Hot-     42. Taylor, C., Pasquale, J.: Improving video performance in VNC
+     Bots 7, 4 (2007)                                                           under high latency conditions. In: 2010 international symposium on
+14. Binsalleeh, H., Ormerod, T., Boukhtouta, A., Sinha, P., Youssef, A.,        collaborative technologies and systems (pp. 26-35). IEEE (2010)
+     Debbabi, M., Wang, L.: On the analysis of the zeus botnet crime-
+     ware toolkit. In 2010 eighth international conference on privacy,     43. https://androidpicks.com/explain-apk/
+     security and trust (pp. 31-38). IEEE (2010)                           44. https://anbox.io/
+15. Shields, M.: Trojan virus steals banking info. http://news.bbc.co.
+     uk/2/hi/technology/7701227.stm                                        Publisher's Note Springer Nature remains neutral with regard to juris-
+16. Al-hamami, A.H., Najadat, F.A.O., Wahhab, M.S.A.: Web applica-         dictional claims in published maps and institutional affiliations.
+     tion security of money transfer systems. J. Emerg. Trends Comput.
+     Inf. Sci. 3(3), 365­372 (2012)
+17. Kalige, E., Burkey, D., Director, I.P.S.: A case study of eurograb-
+     ber: How 36 million euros was stolen via malware. Versafe (White
+     paper) 35, (2012)
+18. Umawing, J.: Malware Eko affecting French Facebook users.
+     https://blog.malwarebytes.com/cybercrime/2016/10/malware-
+     eko-affecting-french-facebook-users/ (2019)
+19. Chiew, K.L., Yong, K.S.C., Tan, C.L.: A survey of phishing attacks:
+     their types, vectors and technical approaches. Exp. Syst. Appl. 106,
+     1­20 (2018)
+20. Vayansky, I., Kumar, S.: Phishing-challenges and solutions. Com-
+     put. Fraud Secur. 2018(1), 15­20 (2018)
+21. Kinnunen, H.: Windowmanager for *nix Operation Systems http://
+     fluxbox.org/
+22. https://www.chromium.org/Home
+23. Richardson, T., Stafford-Fraser, Q., Wood, K.R., Hopper, A.: Vir-
+     tual network computing. IEEE Internet Comput. 2(1), 33­38 (1998)
+24. https://www.thegeekdiary.com/linux-os-service-vncserver/
+25. Richardson, T., Wood, K.R.: The rfb protocol. ORL, Cambridge
+     (1998)
+26. noVNC Project. https://novnc.com/info.html
+27. https://tools.ietf.org/html/rfc6455
+28. https://github.com/novnc/websockify
+29. https://github.com/python-caldav/caldav/blob/master/tests/proxy.
+     py
+30. Rahim, R., Nurdiyanto, H., Abdullah, D., Hartama, D., Napitupulu,
+     D.: Keylogger application to monitoring users activity with exact
+     string matching algorithm. J. Phys. Conf. Series 954(1), 012008
+     (2018)
+31. Moshchuk, A., Bragin, T., Deville, D., Gribble, S.D., Levy, H.M.:
+     SpyProxy: Execution-based Detection of Malicious Web Content.
+     In USENIX security symposium (pp. 1-16) (2007)
+32. Wang, J.: Detection and analysis of web-based malware and vul-
+     nerability (Doctoral dissertation) (2018)
+33. Alcorn, W.: Beef-the browser exploitation framework project
+     (2013)
+34. Sawant, H., Agaga, S.: Web browser attack using BeEF framework
+35. https://chrome.google.com/webstore/detail/fea-keylogger/
+     fgkghpghjcbfcflhoklkcincndlpobja
+36. https://chrome.google.com/webstore/detail/violentmonkey/
+     jinjaccalgkegednnccohejagnlnfdag
+37. https://portswigger.net/burp
+38. https://web.telegram.org
+
+                                                                           123
+
