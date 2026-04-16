@@ -1,5 +1,5 @@
 """
-BitM Detection Plugin — Test Suite v6.2
+BitM Detection Plugin — Test Suite v7.0
 
 Copertura:
   • legit      → browser reali in vari contesti
@@ -7,6 +7,7 @@ Copertura:
   • suspicious → segnali ambigui in pagine sensibili
   • edge       → casi limite (payload minimi, UA unicode, sequenze)
   • system     → feature v6.x (session store, GeoIP, rate-limit, admin, webhook)
+                 + v7.0 (system prompt compatto, pipeline training)
 
 Esecuzione:
   python tests/run_tests.py
@@ -21,10 +22,13 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 
@@ -582,6 +586,197 @@ async def sys_webhook_nonblocking(client: httpx.AsyncClient, base: str) -> dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#   SYSTEM CHECKS v7.0 (prompt compatto + pipeline fine-tuning)
+#   I check v7.0 non richiedono il server — usano import diretti e subprocess
+#   sui moduli della cartella training/. Le firme (client, base) restano per
+#   uniformità con gli altri system check.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Root del pacchetto = cartella genitrice di tests/
+_ROOT = Path(__file__).resolve().parent.parent
+_PROMPT_MAX_CHARS = 650  # 40% riduzione da ~1080 (v6)
+
+
+async def sys_prompt_v7_shortened(client: httpx.AsyncClient, base: str) -> dict:
+    """S10 — il SYSTEM_PROMPT v7 dev'essere ≤ 650 caratteri (riduzione ≥40%)."""
+    try:
+        # Import locale: il modulo app è nella root del pacchetto
+        if str(_ROOT) not in sys.path:
+            sys.path.insert(0, str(_ROOT))
+        from app.scorer import SYSTEM_PROMPT
+        n = len(SYSTEM_PROMPT)
+        passed = n <= _PROMPT_MAX_CHARS
+        # Controlla anche che le direttive essenziali siano ancora presenti
+        essentials = ["JSON", "LEGITIMATE", "SUSPICIOUS", "ATTACK",
+                      "pre_risk_score", "BitM"]
+        missing = [k for k in essentials if k not in SYSTEM_PROMPT]
+        if missing:
+            passed = False
+        return {
+            "id": "S10", "cat": "system",
+            "name": "Prompt v7 compatto (<=650 char, direttive preservate)",
+            "passed": passed,
+            "detail": (f"chars={n} (max {_PROMPT_MAX_CHARS})  "
+                       f"missing={missing or 'none'}"),
+        }
+    except Exception as e:
+        return {
+            "id": "S10", "cat": "system",
+            "name": "Prompt v7 compatto (<=650 char, direttive preservate)",
+            "passed": False, "detail": f"errore: {e}",
+        }
+
+
+async def sys_dataset_builder(client: httpx.AsyncClient, base: str) -> dict:
+    """S11 — build_dataset.py converte log fittizi in dataset ChatML valido."""
+    script = _ROOT / "training" / "build_dataset.py"
+    if not script.exists():
+        return {
+            "id": "S11", "cat": "system",
+            "name": "Dataset builder v7 produce ChatML pulito",
+            "passed": False, "detail": f"{script} non trovato",
+        }
+
+    # Fixture: log minimo con 1 entry per classe + rumore da filtrare
+    fixture = [
+        {"ts": "2026-04-16T10:00:00Z", "ip": "1.1.1.1", "session": "a",
+         "action": "allow",  "context": "default", "score": 0.05, "pre_score": 0.0,
+         "verdict": "LEGITIMATE", "confidence": "high", "indicators": [],
+         "explanation": "ok", "from_cache": False, "latency_ms": 10,
+         "browser": "Chrome", "os": "Windows", "is_mobile": False,
+         "headless_n": 0, "ua": "Mozilla/5.0 Chrome/120"},
+        {"ts": "2026-04-16T10:00:01Z", "ip": "2.2.2.2", "session": "b",
+         "action": "challenge", "context": "login", "score": 0.45, "pre_score": 0.3,
+         "verdict": "SUSPICIOUS", "confidence": "medium", "indicators": ["vpn_detected"],
+         "explanation": "vpn", "from_cache": False, "latency_ms": 12,
+         "browser": "Firefox", "os": "Linux", "is_mobile": False,
+         "headless_n": 0, "ua": "Mozilla/5.0 Firefox/121"},
+        {"ts": "2026-04-16T10:00:02Z", "ip": "3.3.3.3", "session": "c",
+         "action": "block", "context": "payment", "score": 0.91, "pre_score": 0.85,
+         "verdict": "ATTACK", "confidence": "high", "indicators": ["headless_ua"],
+         "explanation": "headless", "from_cache": False, "latency_ms": 8,
+         "browser": "HeadlessChrome", "os": "Linux", "is_mobile": False,
+         "headless_n": 3, "ua": "Mozilla/5.0 HeadlessChrome/120"},
+        # Rumore: entry da cache (deve essere scartata)
+        {"ts": "2026-04-16T10:00:03Z", "ip": "4.4.4.4", "session": "d",
+         "action": "allow", "context": "default", "score": 0.05, "pre_score": 0.0,
+         "verdict": "LEGITIMATE", "confidence": "high", "indicators": [],
+         "explanation": "ok", "from_cache": True, "latency_ms": 1,
+         "browser": "Chrome", "os": "Windows", "is_mobile": False,
+         "headless_n": 0, "ua": "Mozilla/5.0 Chrome/120"},
+        # Rumore: error indicator (deve essere scartata)
+        {"ts": "2026-04-16T10:00:04Z", "ip": "5.5.5.5", "session": "e",
+         "action": "challenge", "context": "login", "score": 0.5, "pre_score": 0.0,
+         "verdict": "SUSPICIOUS", "confidence": "low", "indicators": ["api_error"],
+         "explanation": "err", "from_cache": False, "latency_ms": 3000,
+         "browser": "?", "os": "?", "is_mobile": False, "headless_n": 0, "ua": "?"},
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        log_path = tmp_path / "events.jsonl"
+        with log_path.open("w", encoding="utf-8") as f:
+            for entry in fixture:
+                f.write(json.dumps(entry) + "\n")
+        out_dir = tmp_path / "out"
+
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(script),
+                 "--input", str(log_path),
+                 "--output-dir", str(out_dir),
+                 "--val-split", "0.0"],
+                capture_output=True, text=True, timeout=30,
+            )
+        except Exception as e:
+            return {
+                "id": "S11", "cat": "system",
+                "name": "Dataset builder v7 produce ChatML pulito",
+                "passed": False, "detail": f"errore esecuzione: {e}",
+            }
+
+        if proc.returncode != 0:
+            return {
+                "id": "S11", "cat": "system",
+                "name": "Dataset builder v7 produce ChatML pulito",
+                "passed": False,
+                "detail": f"exit={proc.returncode}  stderr={proc.stderr[:200]}",
+            }
+
+        stats_file = out_dir / "stats.json"
+        train_file = out_dir / "train.jsonl"
+        if not stats_file.exists() or not train_file.exists():
+            return {
+                "id": "S11", "cat": "system",
+                "name": "Dataset builder v7 produce ChatML pulito",
+                "passed": False, "detail": "output atteso mancante",
+            }
+
+        stats = json.loads(stats_file.read_text(encoding="utf-8"))
+        # Verifica: 3 entry valide conservate, rumore scartato
+        kept_ok = stats.get("kept") == 3
+        skipped = stats.get("skipped", {}) or {}
+        filtered_ok = skipped.get("filtered", 0) >= 2  # cache + api_error
+
+        # Verifica ChatML: prima riga deve avere 3 messaggi (system/user/assistant)
+        chatml_ok = True
+        with train_file.open(encoding="utf-8") as f:
+            first = json.loads(next(f))
+        msgs = first.get("messages", [])
+        if len(msgs) != 3 or [m["role"] for m in msgs] != ["system", "user", "assistant"]:
+            chatml_ok = False
+        # Il target assistant dev'essere JSON parsabile e contenere verdict valido
+        try:
+            target = json.loads(msgs[2]["content"])
+            if target.get("verdict") not in {"LEGITIMATE", "SUSPICIOUS", "ATTACK"}:
+                chatml_ok = False
+        except Exception:
+            chatml_ok = False
+
+        passed = kept_ok and filtered_ok and chatml_ok
+        return {
+            "id": "S11", "cat": "system",
+            "name": "Dataset builder v7 produce ChatML pulito",
+            "passed": passed,
+            "detail": (f"kept={stats.get('kept')}  skipped={skipped}  "
+                       f"chatml_ok={chatml_ok}"),
+        }
+
+
+async def sys_train_lora_cli(client: httpx.AsyncClient, base: str) -> dict:
+    """S12 — train_lora.py è sintatticamente valido e la sua CLI è funzionante."""
+    script = _ROOT / "training" / "train_lora.py"
+    if not script.exists():
+        return {
+            "id": "S12", "cat": "system",
+            "name": "Training LoRA CLI parseable senza dipendenze ML",
+            "passed": False, "detail": f"{script} non trovato",
+        }
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except Exception as e:
+        return {
+            "id": "S12", "cat": "system",
+            "name": "Training LoRA CLI parseable senza dipendenze ML",
+            "passed": False, "detail": f"errore esecuzione: {e}",
+        }
+    out = (proc.stdout or "") + (proc.stderr or "")
+    required_flags = ["--dataset-dir", "--base-model", "--output-dir",
+                      "--lora-r", "--lora-alpha", "--no-4bit"]
+    missing = [f for f in required_flags if f not in out]
+    passed = proc.returncode == 0 and not missing
+    return {
+        "id": "S12", "cat": "system",
+        "name": "Training LoRA CLI parseable senza dipendenze ML",
+        "passed": passed,
+        "detail": (f"exit={proc.returncode}  missing_flags={missing or 'none'}"),
+    }
+
+
 SYSTEM_CHECKS = [
     sys_health,
     sys_session_persistence,
@@ -592,6 +787,10 @@ SYSTEM_CHECKS = [
     sys_cache_speedup,
     sys_webhook_field,
     sys_webhook_nonblocking,
+    # ── v7.0 ──
+    sys_prompt_v7_shortened,
+    sys_dataset_builder,
+    sys_train_lora_cli,
 ]
 
 
@@ -609,7 +808,7 @@ def print_report(cases: list, systems: list) -> dict:
         by_cat.setdefault(r["cat"], []).append(r)
 
     print(f"\n{B}{'='*72}{X}")
-    print(f"{B}  BitM Detection Plugin v6.2 — Test Suite{X}")
+    print(f"{B}  BitM Detection Plugin v7.0 — Test Suite{X}")
     print(f"{'='*72}")
 
     for cat in ("legit", "attack", "suspicious", "edge"):
@@ -636,7 +835,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     if systems:
         sys_pass = sum(1 for r in systems if r["passed"])
-        print(f"\n{B}SYSTEM v6.2 ({sys_pass}/{len(systems)}){X}")
+        print(f"\n{B}SYSTEM v6.2 + v7.0 ({sys_pass}/{len(systems)}){X}")
         for r in systems:
             icon = f"{G}✓{X}" if r["passed"] else f"{R}✗{X}"
             print(f"  {icon} [{r['id']}] {r['name']}")
@@ -651,7 +850,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "version":   "6.2",
+        "version":   "7.0",
         "passed":    passed,
         "total":     total,
         "accuracy":  round(passed / total, 3) if total else 0,
@@ -680,7 +879,7 @@ def _select(cases: list, flt: str | None, only: str | None) -> list:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="BitM Test Suite v6.2")
+    parser = argparse.ArgumentParser(description="BitM Test Suite v7.0")
     parser.add_argument("--filter", help="Categorie separate da virgola (legit,attack,...)")
     parser.add_argument("--only",   help="ID specifici separati da virgola (T01,T05,...)")
     parser.add_argument("--parallel", type=int, default=1,
@@ -735,7 +934,7 @@ async def main():
         # System checks v6
         systems: list = []
         if not args.skip_system and not args.only:
-            print(f"\n  {C}── SYSTEM CHECKS v6.2 ──{X}")
+            print(f"\n  {C}── SYSTEM CHECKS v6.2 + v7.0 ──{X}")
             # Reset prima dei system check
             try:
                 await client.delete(f"{base}/api/bitm/sessions", timeout=10)
