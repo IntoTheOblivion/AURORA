@@ -1,5 +1,5 @@
 """
-Config v5 — legge .env e decide quale backend LLM usare.
+Config v6 — legge .env e decide quale backend LLM usare.
 
 Variabili supportate:
 
@@ -13,6 +13,14 @@ Variabili supportate:
   OLLAMA_HOST=http://localhost:11434   (default)
   OLLAMA_MODEL=llama3.1                (default)
   OLLAMA_TIMEOUT=60                    (secondi, default 60)
+
+  # Redis (sessioni persistenti condivise multi-processo)
+  REDIS_URL=redis://localhost:6379/0
+  REDIS_SESSION_TTL=3600               (secondi, default 1h)
+
+  # GeoIP (MaxMind GeoLite2)
+  MAXMIND_CITY_DB=/path/to/GeoLite2-City.mmdb
+  MAXMIND_ASN_DB=/path/to/GeoLite2-ASN.mmdb
 """
 
 import os
@@ -35,6 +43,16 @@ ANTHROPIC_MODELS = [
 OLLAMA_HOST: str    = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL: str   = os.getenv("OLLAMA_MODEL", "llama3.1")
 OLLAMA_TIMEOUT: int = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+
+# ── Redis & Webhook ───────────────────────────────────────────────────────────
+REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_SESSION_TTL: int = int(os.getenv("REDIS_SESSION_TTL", "3600"))
+REDIS_KEY_PREFIX: str = os.getenv("REDIS_KEY_PREFIX", "bitm:")
+WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "")
+
+# ── GeoIP (MaxMind GeoLite2) ──────────────────────────────────────────────────
+MAXMIND_CITY_DB: str = os.getenv("MAXMIND_CITY_DB", "").strip()
+MAXMIND_ASN_DB:  str = os.getenv("MAXMIND_ASN_DB",  "").strip()
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 CACHE_TTL_S: int = int(os.getenv("CACHE_TTL", "300"))   # 5 minuti default

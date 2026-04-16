@@ -1,9 +1,10 @@
 {
-  "timestamp": "2026-04-15T12:39:00.590828",
-  "passed": 12,
-  "total": 12,
+  "timestamp": "2026-04-16T11:30:06.861001",
+  "version": "6.0",
+  "passed": 27,
+  "total": 27,
   "accuracy": 1.0,
-  "results": [
+  "cases": [
     {
       "id": "T01",
       "cat": "legit",
@@ -12,14 +13,13 @@
       "expected": "allow",
       "got": "allow",
       "score": 0.0,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 11558.8,
-      "total_ms": 11560
+      "plugin_ms": 3688.1,
+      "total_ms": 3690
     },
     {
       "id": "T02",
@@ -29,14 +29,13 @@
       "expected": "allow",
       "got": "allow",
       "score": 0.0,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "admin",
-      "plugin_ms": 1524.0,
-      "total_ms": 1526
+      "plugin_ms": 1614.9,
+      "total_ms": 1618
     },
     {
       "id": "T03",
@@ -46,14 +45,13 @@
       "expected": "allow",
       "got": "allow",
       "score": 0.0,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1494.5,
-      "total_ms": 1496
+      "plugin_ms": 1602.4,
+      "total_ms": 1604
     },
     {
       "id": "T04",
@@ -63,24 +61,38 @@
       "expected": "allow",
       "got": "allow",
       "score": 0.0,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1496.7,
-      "total_ms": 1498
+      "plugin_ms": 1692.1,
+      "total_ms": 1694
     },
     {
       "id": "T05",
+      "cat": "legit",
+      "name": "Chrome Android / timing naturale",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "default",
+      "plugin_ms": 1569.4,
+      "total_ms": 1571
+    },
+    {
+      "id": "T06",
       "cat": "attack",
       "name": "HeadlessChrome / Evilginx",
       "passed": true,
       "expected": "block",
       "got": "block",
       "score": 0.97,
-      "pre": "—",
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -94,14 +106,13 @@
       "total_ms": 2
     },
     {
-      "id": "T06",
+      "id": "T07",
       "cat": "attack",
       "name": "Playwright / webdriver=true / SwiftShader",
       "passed": true,
       "expected": "block",
       "got": "block",
       "score": 0.97,
-      "pre": "—",
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -113,14 +124,13 @@
       "total_ms": 2
     },
     {
-      "id": "T07",
+      "id": "T08",
       "cat": "attack",
       "name": "Selenium / no plugin + no WebGL / desktop",
       "passed": true,
       "expected": "block",
       "got": "block",
       "score": 0.97,
-      "pre": "—",
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -132,14 +142,13 @@
       "total_ms": 2
     },
     {
-      "id": "T08",
+      "id": "T09",
       "cat": "attack",
       "name": "Tor exit node / checkout",
       "passed": true,
       "expected": "block",
       "got": "block",
       "score": 0.97,
-      "pre": "—",
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -148,17 +157,54 @@
       "reason": "Segnale critico: tor_exit_node",
       "context": "payment",
       "plugin_ms": 0.1,
+      "total_ms": 6
+    },
+    {
+      "id": "T10",
+      "cat": "attack",
+      "name": "Puppeteer UA marker",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "headless_ua",
+        "webdriver_flag",
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
+      "context": "admin",
+      "plugin_ms": 0.1,
       "total_ms": 2
     },
     {
-      "id": "T09",
+      "id": "T11",
+      "cat": "attack",
+      "name": "Latenza estrema (>600ms) = scraping",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "extreme_latency"
+      ],
+      "reason": "Segnale critico: extreme_latency",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 2
+    },
+    {
+      "id": "T12",
       "cat": "suspicious",
       "name": "VPN + pagina login",
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
       "score": 0.12,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [
@@ -166,37 +212,35 @@
       ],
       "reason": "[ctx=login boost=0.16] browser reale, VPN in uso",
       "context": "login",
-      "plugin_ms": 1697.4,
-      "total_ms": 1699
+      "plugin_ms": 1796.2,
+      "total_ms": 1799
     },
     {
-      "id": "T10",
+      "id": "T13",
       "cat": "suspicious",
       "name": "Latenza alta (380ms) / pagamento",
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
       "score": 0.22,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [
         "high_latency_380ms"
       ],
-      "reason": "latenza media 380ms su richiesta",
+      "reason": "latenza media 380ms su richiesta unica",
       "context": "payment",
-      "plugin_ms": 1644.7,
-      "total_ms": 1646
+      "plugin_ms": 1776.5,
+      "total_ms": 1778
     },
     {
-      "id": "T11",
+      "id": "T14",
       "cat": "suspicious",
       "name": "VPN + canvas vuoto + login",
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
       "score": 0.27,
-      "pre": "—",
       "verdict": "SUSPICIOUS",
       "confidence": "medium",
       "indicators": [
@@ -205,27 +249,172 @@
       ],
       "reason": "[ctx=login boost=0.23] browser reale, comportamento normale ma segnali ambigui",
       "context": "login",
-      "plugin_ms": 1920.9,
-      "total_ms": 1923
+      "plugin_ms": 1940.9,
+      "total_ms": 1943
     },
     {
-      "id": "T12",
+      "id": "T15",
       "cat": "suspicious",
       "name": "Timezone UTC + lingua italiana (anomalia)",
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
       "score": 0.1,
-      "pre": "—",
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [
         "timezone_anomaly"
       ],
-      "reason": "[ctx=admin boost=0.12] browser reale, anomalia timezone",
+      "reason": "[ctx=admin boost=0.12] browser reale, timezone anomalo",
       "context": "admin",
-      "plugin_ms": 1592.5,
-      "total_ms": 1594
+      "plugin_ms": 1650.2,
+      "total_ms": 1652
+    },
+    {
+      "id": "T16",
+      "cat": "suspicious",
+      "name": "Risoluzione 1024x768 + no-lingua / login",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.31,
+      "verdict": "SUSPICIOUS",
+      "confidence": "medium",
+      "indicators": [
+        "no_languages",
+        "suspicious_resolution"
+      ],
+      "reason": "[ctx=login boost=0.14] browser reale, comportamento normale ma segnali ambigui",
+      "context": "login",
+      "plugin_ms": 2041.7,
+      "total_ms": 2043
+    },
+    {
+      "id": "T17",
+      "cat": "edge",
+      "name": "Payload minimo (solo UA)",
+      "passed": true,
+      "expected": "challenge|block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: no_plugins_no_webgl",
+      "context": "login",
+      "plugin_ms": 0.0,
+      "total_ms": 3
+    },
+    {
+      "id": "T18",
+      "cat": "edge",
+      "name": "User-Agent con caratteri unicode",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "default",
+      "plugin_ms": 1735.9,
+      "total_ms": 1746
+    },
+    {
+      "id": "T19",
+      "cat": "edge",
+      "name": "Static asset (soglie rilassate)",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "static",
+      "plugin_ms": 1574.1,
+      "total_ms": 1576
+    },
+    {
+      "id": "T20",
+      "cat": "edge",
+      "name": "Path sconosciuto = default context",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [],
+      "reason": "browser reale, comportamento normale",
+      "context": "default",
+      "plugin_ms": 1580.3,
+      "total_ms": 1582
+    }
+  ],
+  "system": [
+    {
+      "id": "S01",
+      "cat": "system",
+      "name": "Health esposto v6 (store/geoip)",
+      "passed": true,
+      "detail": "ok",
+      "extra": {
+        "status": "ok",
+        "version": "6.0.0",
+        "backend": "ollama",
+        "model": "ollama/llama3.1",
+        "sessions": 0,
+        "blocked_ips": 0,
+        "store": "memory",
+        "geoip": "MaxMind DB non configurati (MAXMIND_CITY_DB / MAXMIND_ASN_DB)"
+      }
+    },
+    {
+      "id": "S02",
+      "cat": "system",
+      "name": "Session store persiste richieste multi-step",
+      "passed": true,
+      "detail": "backend=memory req_count=4 atteso>=4"
+    },
+    {
+      "id": "S03",
+      "cat": "system",
+      "name": "IP-block escalation dopo 3 block consecutivi",
+      "passed": true,
+      "detail": "ip=203.0.113.57 in blocked=True (n blocked=1)"
+    },
+    {
+      "id": "S04",
+      "cat": "system",
+      "name": "Rate-limit scatta oltre la soglia",
+      "passed": true,
+      "detail": "richieste prima del 429: 31 (atteso <= RATE_LIMIT+poche)"
+    },
+    {
+      "id": "S05",
+      "cat": "system",
+      "name": "GeoIP enrichment gestisce IP privato senza errori",
+      "passed": true,
+      "detail": "collect=200 health=200"
+    },
+    {
+      "id": "S06",
+      "cat": "system",
+      "name": "Admin DELETE azzera sessioni e blocked",
+      "passed": true,
+      "detail": "prima=(33,1) dopo=(0,0)"
+    },
+    {
+      "id": "S07",
+      "cat": "system",
+      "name": "Cache LLM velocizza richieste successive",
+      "passed": true,
+      "detail": "primo=0.0ms secondo=0.1ms"
     }
   ]
 }
