@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-16T11:30:06.861001",
+  "timestamp": "2026-04-16T11:49:47.178149",
   "version": "6.0",
   "passed": 27,
   "total": 27,
@@ -18,8 +18,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 3688.1,
-      "total_ms": 3690
+      "plugin_ms": 1796.5,
+      "total_ms": 1798
     },
     {
       "id": "T02",
@@ -34,8 +34,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "admin",
-      "plugin_ms": 1614.9,
-      "total_ms": 1618
+      "plugin_ms": 1603.8,
+      "total_ms": 1606
     },
     {
       "id": "T03",
@@ -50,8 +50,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1602.4,
-      "total_ms": 1604
+      "plugin_ms": 1711.3,
+      "total_ms": 1713
     },
     {
       "id": "T04",
@@ -66,8 +66,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1692.1,
-      "total_ms": 1694
+      "plugin_ms": 1721.1,
+      "total_ms": 1723
     },
     {
       "id": "T05",
@@ -82,8 +82,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1569.4,
-      "total_ms": 1571
+      "plugin_ms": 1584.5,
+      "total_ms": 1586
     },
     {
       "id": "T06",
@@ -102,7 +102,7 @@
       ],
       "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
       "context": "login",
-      "plugin_ms": 0.1,
+      "plugin_ms": 0.2,
       "total_ms": 2
     },
     {
@@ -157,7 +157,7 @@
       "reason": "Segnale critico: tor_exit_node",
       "context": "payment",
       "plugin_ms": 0.1,
-      "total_ms": 6
+      "total_ms": 2
     },
     {
       "id": "T10",
@@ -212,8 +212,8 @@
       ],
       "reason": "[ctx=login boost=0.16] browser reale, VPN in uso",
       "context": "login",
-      "plugin_ms": 1796.2,
-      "total_ms": 1799
+      "plugin_ms": 1665.5,
+      "total_ms": 1667
     },
     {
       "id": "T13",
@@ -228,10 +228,10 @@
       "indicators": [
         "high_latency_380ms"
       ],
-      "reason": "latenza media 380ms su richiesta unica",
+      "reason": "latenza elevata, richiesta pagamento",
       "context": "payment",
-      "plugin_ms": 1776.5,
-      "total_ms": 1778
+      "plugin_ms": 1667.2,
+      "total_ms": 1669
     },
     {
       "id": "T14",
@@ -249,8 +249,8 @@
       ],
       "reason": "[ctx=login boost=0.23] browser reale, comportamento normale ma segnali ambigui",
       "context": "login",
-      "plugin_ms": 1940.9,
-      "total_ms": 1943
+      "plugin_ms": 1945.7,
+      "total_ms": 1948
     },
     {
       "id": "T15",
@@ -265,10 +265,10 @@
       "indicators": [
         "timezone_anomaly"
       ],
-      "reason": "[ctx=admin boost=0.12] browser reale, timezone anomalo",
+      "reason": "[ctx=admin boost=0.12] browser reale, anomalia timezone",
       "context": "admin",
-      "plugin_ms": 1650.2,
-      "total_ms": 1652
+      "plugin_ms": 1652.9,
+      "total_ms": 1655
     },
     {
       "id": "T16",
@@ -277,17 +277,17 @@
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
-      "score": 0.31,
+      "score": 0.25,
       "verdict": "SUSPICIOUS",
       "confidence": "medium",
       "indicators": [
         "no_languages",
         "suspicious_resolution"
       ],
-      "reason": "[ctx=login boost=0.14] browser reale, comportamento normale ma segnali ambigui",
+      "reason": "[ctx=login boost=0.14] browser reale, comportamento anomalo",
       "context": "login",
-      "plugin_ms": 2041.7,
-      "total_ms": 2043
+      "plugin_ms": 1859.2,
+      "total_ms": 1861
     },
     {
       "id": "T17",
@@ -304,8 +304,8 @@
       ],
       "reason": "Segnale critico: no_plugins_no_webgl",
       "context": "login",
-      "plugin_ms": 0.0,
-      "total_ms": 3
+      "plugin_ms": 0.1,
+      "total_ms": 2
     },
     {
       "id": "T18",
@@ -320,8 +320,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1735.9,
-      "total_ms": 1746
+      "plugin_ms": 1808.0,
+      "total_ms": 1810
     },
     {
       "id": "T19",
@@ -336,7 +336,7 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "static",
-      "plugin_ms": 1574.1,
+      "plugin_ms": 1574.5,
       "total_ms": 1576
     },
     {
@@ -352,8 +352,8 @@
       "indicators": [],
       "reason": "browser reale, comportamento normale",
       "context": "default",
-      "plugin_ms": 1580.3,
-      "total_ms": 1582
+      "plugin_ms": 1578.0,
+      "total_ms": 1580
     }
   ],
   "system": [
@@ -386,7 +386,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.57 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.238 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",

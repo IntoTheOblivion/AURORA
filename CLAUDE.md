@@ -55,6 +55,7 @@ HTTP request
   → score_session (app/scorer.py)            LLM call (if not short-circuited), with TTL cache
   → decide (app/policy.py)                   final Action + reason
   → session persist + log_event              JSONL log to bitm_events.jsonl
+  → broadcaster.publish (app/broadcaster.py) fan-out to /ws/events clients
 ```
 
 Key architectural invariants:
@@ -84,4 +85,8 @@ Version string lives in three places that must stay in sync: `FastAPI(version=..
 
 ### Logging
 
-Every request ends with `log_event(...)` appending a JSON line to `bitm-plugin/bitm_events.jsonl`. This file is checked into the repo — don't treat it as generated output to delete, but also don't grow it as part of normal edits.
+Every request ends with `log_event(...)` appending a JSON line to `bitm-plugin/bitm_events.jsonl`. This file is checked into the repo — don't treat it as generated output to delete, but also don't grow it as part of normal edits. `log_event` also returns the entry dict so `main.py` can hand the same payload to the WebSocket broadcaster.
+
+### Real-time dashboard (v6.1)
+
+`app/broadcaster.py` is an in-process pub/sub: the `EventBroadcaster` singleton holds a set of connected `/ws/events` clients plus a 500-slot ring buffer. New WebSocket clients receive the ring as a `{"type":"backlog"}` frame so the dashboard doesn't start empty; every subsequent `/api/bitm/collect` produces one `{"type":"event"}` frame. It is **single-worker only** — running uvicorn with `--workers > 1` would give each worker its own broadcaster; promote the transport to Redis pub/sub if that's needed. The dashboard itself is plain HTML/JS at `app/static/dashboard.html`, served at `/dashboard`, using Chart.js from CDN and generating CSV client-side from its in-memory event buffer.

@@ -10,7 +10,7 @@ Novità v6:
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,8 +21,9 @@ from app.policy import decide, Action, detect_page_context
 from app.logger import log_event
 from app.redis_client import get_store
 from app.geoip import resolve as geoip_resolve, summary as geoip_summary
+from app.broadcaster import get_broadcaster
 
-app = FastAPI(title="BitM Detection Plugin", version="6.0.0")
+app = FastAPI(title="BitM Detection Plugin", version="6.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,7 +37,8 @@ RATE_LIMIT  = 30
 RATE_WINDOW = 60
 BLOCK_AFTER = 3
 
-_store = get_store()
+_store       = get_store()
+_broadcaster = get_broadcaster()
 
 
 # ── Middleware: GeoIP enrichment ──────────────────────────────────────────────
@@ -87,13 +89,14 @@ async def index():
 async def health():
     return {
         "status":      "ok",
-        "version":     "6.0.0",
+        "version":     "6.1.0",
         "backend":     LLM_BACKEND,
         "model":       get_selected_model(),
         "sessions":    await _store.session_count(),
         "blocked_ips": await _store.blocked_count(),
         "store":       _store.backend,
         "geoip":       geoip_summary(),
+        "ws_clients":  _broadcaster.client_count,
     }
 
 
@@ -170,7 +173,8 @@ async def collect(request: Request, body: dict):
     await _store.set_session(sid, store)
 
     elapsed = round((time.time() - t0) * 1000, 1)
-    log_event(ip, sid, features, result, action, elapsed, context)
+    entry   = log_event(ip, sid, features, result, action, elapsed, context)
+    await _broadcaster.publish(entry)
 
     return _resp(
         action.value,
@@ -255,3 +259,28 @@ async def clear():
     await _store.clear_blocked()
     await _store.clear_rate()
     return {"cleared": True, "backend": _store.backend}
+
+
+# ── Dashboard real-time (v6.1) ────────────────────────────────────────────────
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    p = STATIC_DIR / "dashboard.html"
+    if not p.exists():
+        raise HTTPException(404, detail="dashboard.html non trovato")
+    return p.read_text(encoding="utf-8")
+
+
+@app.websocket("/ws/events")
+async def ws_events(ws: WebSocket):
+    """Feed real-time degli eventi /api/bitm/collect."""
+    await _broadcaster.connect(ws)
+    try:
+        while True:
+            # Consumiamo eventuali messaggi dal client (ping/keepalive).
+            # Non ci aspettiamo comandi: è un canale pubblicazione-only.
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await _broadcaster.disconnect(ws)
