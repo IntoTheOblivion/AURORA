@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-16T19:06:14.274146",
+  "timestamp": "2026-04-16T19:32:29.264440",
   "version": "7.0",
   "passed": 32,
   "total": 32,
@@ -18,8 +18,8 @@
       "indicators": [],
       "reason": "",
       "context": "default",
-      "plugin_ms": 4503.8,
-      "total_ms": 4506
+      "plugin_ms": 3383.5,
+      "total_ms": 3386
     },
     {
       "id": "T02",
@@ -34,10 +34,10 @@
       "indicators": [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.2; rv:121.0) Gecko/20100101 Firefox/121.0"
       ],
-      "reason": "Browser normale con user agent e plugin OpenH264",
+      "reason": "Browser normale con User-Agent e plugin OpenH264",
       "context": "admin",
-      "plugin_ms": 2626.3,
-      "total_ms": 2629
+      "plugin_ms": 2599.1,
+      "total_ms": 2601
     },
     {
       "id": "T03",
@@ -52,8 +52,8 @@
       "indicators": [],
       "reason": "",
       "context": "default",
-      "plugin_ms": 1372.4,
-      "total_ms": 1377
+      "plugin_ms": 1395.3,
+      "total_ms": 1397
     },
     {
       "id": "T04",
@@ -68,8 +68,8 @@
       "indicators": [],
       "reason": "",
       "context": "default",
-      "plugin_ms": 1359.5,
-      "total_ms": 1361
+      "plugin_ms": 1388.8,
+      "total_ms": 1391
     },
     {
       "id": "T05",
@@ -84,8 +84,8 @@
       "indicators": [],
       "reason": "",
       "context": "default",
-      "plugin_ms": 1354.3,
-      "total_ms": 1356
+      "plugin_ms": 1455.2,
+      "total_ms": 1457
     },
     {
       "id": "T06",
@@ -104,8 +104,8 @@
       ],
       "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
       "context": "login",
-      "plugin_ms": 1.8,
-      "total_ms": 5
+      "plugin_ms": 2.0,
+      "total_ms": 4
     },
     {
       "id": "T07",
@@ -122,8 +122,8 @@
       ],
       "reason": "Segnale critico: webdriver_flag, webdriver_true",
       "context": "login",
-      "plugin_ms": 10.2,
-      "total_ms": 12
+      "plugin_ms": 1.7,
+      "total_ms": 4
     },
     {
       "id": "T08",
@@ -140,8 +140,8 @@
       ],
       "reason": "Segnale critico: no_plugins_no_webgl",
       "context": "payment",
-      "plugin_ms": 1.6,
-      "total_ms": 3
+      "plugin_ms": 2.2,
+      "total_ms": 4
     },
     {
       "id": "T09",
@@ -158,8 +158,8 @@
       ],
       "reason": "Segnale critico: tor_exit_node",
       "context": "payment",
-      "plugin_ms": 2.0,
-      "total_ms": 4
+      "plugin_ms": 2.9,
+      "total_ms": 6
     },
     {
       "id": "T10",
@@ -178,7 +178,7 @@
       ],
       "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
       "context": "admin",
-      "plugin_ms": 1.7,
+      "plugin_ms": 1.8,
       "total_ms": 4
     },
     {
@@ -196,7 +196,7 @@
       ],
       "reason": "Segnale critico: extreme_latency",
       "context": "default",
-      "plugin_ms": 2.0,
+      "plugin_ms": 2.6,
       "total_ms": 5
     },
     {
@@ -214,8 +214,8 @@
       ],
       "reason": "[ctx=login boost=0.16] VPN detected",
       "context": "login",
-      "plugin_ms": 1580.4,
-      "total_ms": 1583
+      "plugin_ms": 1612.5,
+      "total_ms": 1615
     },
     {
       "id": "T13",
@@ -232,8 +232,8 @@
       ],
       "reason": "High latency detected on page load",
       "context": "payment",
-      "plugin_ms": 1741.7,
-      "total_ms": 1744
+      "plugin_ms": 1812.8,
+      "total_ms": 1816
     },
     {
       "id": "T14",
@@ -251,8 +251,8 @@
       ],
       "reason": "[ctx=login boost=0.23] Browser reale con segnali ambigui",
       "context": "login",
-      "plugin_ms": 1801.2,
-      "total_ms": 1803
+      "plugin_ms": 1832.5,
+      "total_ms": 1835
     },
     {
       "id": "T15",
@@ -269,8 +269,8 @@
       ],
       "reason": "[ctx=admin boost=0.12] Browser in uso sembra essere un browser reale, ma è stato rilevato un segnale di anomalia sulla timezone.",
       "context": "admin",
-      "plugin_ms": 2198.8,
-      "total_ms": 2201
+      "plugin_ms": 2266.9,
+      "total_ms": 2269
     },
     {
       "id": "T16",
@@ -288,8 +288,8 @@
       ],
       "reason": "[ctx=login boost=0.14] Browser with ambiguous signals",
       "context": "login",
-      "plugin_ms": 1662.9,
-      "total_ms": 1665
+      "plugin_ms": 1661.3,
+      "total_ms": 1664
     },
     {
       "id": "T17",
@@ -306,7 +306,7 @@
       ],
       "reason": "Segnale critico: no_plugins_no_webgl",
       "context": "login",
-      "plugin_ms": 2.5,
+      "plugin_ms": 2.1,
       "total_ms": 5
     },
     {
@@ -322,8 +322,8 @@
       "indicators": [],
       "reason": "",
       "context": "default",
-      "plugin_ms": 1463.4,
-      "total_ms": 1465
+      "plugin_ms": 1452.7,
+      "total_ms": 1454
     },
     {
       "id": "T19",
@@ -338,8 +338,8 @@
       "indicators": [],
       "reason": "",
       "context": "static",
-      "plugin_ms": 1350.4,
-      "total_ms": 1353
+      "plugin_ms": 1340.9,
+      "total_ms": 1343
     },
     {
       "id": "T20",
@@ -354,8 +354,8 @@
       "indicators": [],
       "reason": "",
       "context": "default",
-      "plugin_ms": 1330.7,
-      "total_ms": 1333
+      "plugin_ms": 1335.2,
+      "total_ms": 1337
     }
   ],
   "system": [
@@ -392,7 +392,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.174 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.249 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -420,7 +420,7 @@
       "cat": "system",
       "name": "Cache LLM velocizza richieste successive",
       "passed": true,
-      "detail": "primo=1.2ms secondo=1.2ms"
+      "detail": "primo=1.1ms secondo=1.2ms"
     },
     {
       "id": "S08",
@@ -437,7 +437,7 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=3ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=2ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",

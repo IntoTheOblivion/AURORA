@@ -5,6 +5,7 @@ Variabili supportate:
 
   LLM_BACKEND=anthropic   (default) usa Anthropic API
   LLM_BACKEND=ollama      usa Ollama locale
+  LLM_BACKEND=stub        scorer deterministico (CI / E2E / dev senza LLM reale)
 
   # Anthropic
   ANTHROPIC_API_KEY=sk-ant-...
@@ -82,10 +83,12 @@ def validate() -> list[str]:
             )
     elif LLM_BACKEND == "ollama":
         pass   # validato al primo uso (Ollama potrebbe non essere ancora avviato)
+    elif LLM_BACKEND == "stub":
+        pass   # nessuna dipendenza esterna
     else:
         errors.append(
             f"LLM_BACKEND='{LLM_BACKEND}' non riconosciuto. "
-            "Valori validi: 'anthropic', 'ollama'"
+            "Valori validi: 'anthropic', 'ollama', 'stub'"
         )
     return errors
 
@@ -93,4 +96,6 @@ def validate() -> list[str]:
 def summary() -> str:
     if LLM_BACKEND == "ollama":
         return f"ollama @ {OLLAMA_HOST}  model={OLLAMA_MODEL}"
+    if LLM_BACKEND == "stub":
+        return "stub (deterministico, no-LLM)"
     return f"anthropic  key={ANTHROPIC_API_KEY[:12]}..." if ANTHROPIC_API_KEY else "anthropic  (no key)"

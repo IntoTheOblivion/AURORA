@@ -6,6 +6,8 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 > Webhook push notifications (Slack / Teams / SIEM) per eventi BLOCK — notifiche HTTP asincrone fire-and-forget con retry esponenziale.
 >
 > **In preparazione: 7.0** — infrastruttura di fine-tuning LoRA per LLaMA 3.1 (`bitm-plugin/training/`) e system prompt compatto (~40% più corto) per ridurre la latenza di inferenza.
+>
+> **In preparazione: 7.1** — suite E2E Playwright (`bitm-plugin/tests/e2e_playwright/`) che simula attacchi evasivi reali (UA rotation, input sub-human, stealth patches, canvas/WebGL spoof, …) + workflow GitHub Actions (`.github/workflows/e2e-playwright.yml`) con soglia detection ≥ 90%. Backend `stub` deterministico in `scorer.py` per CI senza LLM reale.
 
 ---
 
@@ -27,6 +29,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Webhook push notifications](#-webhook-push-notifications-v62)
 - [Log eventi](#-log-eventi)
 - [Fine-tuning LoRA (v7.0)](#-fine-tuning-lora-v70)
+- [E2E Playwright + CI (v7.1)](#-e2e-playwright--ci-v71)
 - [Test](#-test)
 - [Changelog](#-changelog)
 
@@ -114,7 +117,10 @@ bitm-plugin/
 │       ├── dashboard.html   # Dashboard real-time
 │       └── test_page.html   # Pagina di test manuale
 ├── tests/
-│   └── run_tests.py     # Test suite (29 casi: legit/attack/suspicious/edge/system)
+│   ├── run_tests.py     # Test suite (32 casi: legit/attack/suspicious/edge/system)
+│   └── e2e_playwright/                                                          [v7.1]
+│       ├── run_e2e.py          # Orchestratore scenari evasivi + report
+│       └── requirements-e2e.txt
 ├── training/                                                                    [v7.0]
 │   ├── build_dataset.py # Converte bitm_events.jsonl → dataset ChatML SFT
 │   └── train_lora.py    # Fine-tuning LoRA di LLaMA 3.1 (transformers + peft + trl)
@@ -633,6 +639,85 @@ L'adapter salvato è caricabile a runtime con `peft.PeftModel.from_pretrained(ba
 
 ---
 
+## 🎭 E2E Playwright + CI (v7.1)
+
+La suite `bitm-plugin/tests/e2e_playwright/run_e2e.py` guida browser Chromium **headless** reali con Playwright e li fa attaccare l'API. Ogni scenario applica evasioni concrete (init-script JS, route blocking, rotazione UA, canvas/WebGL spoof) e POSTa il fingerprint reale a `/api/bitm/collect`.
+
+### Tecniche di evasione (7, ≥ 5 richieste)
+
+| ID | Tecnica | Meccanismo |
+|----|---------|-----------|
+| A01 | Plain headless (baseline) | UA HeadlessChrome di default |
+| A02 | UA rotation mid-session | UA diverso a ogni iterazione (`UA_POOL`) |
+| A03 | Fast input injection | `timing: 3ms` (sub-human) |
+| A04 | No static resources | `context.route('**/*.{png,css,woff,…}', abort)` |
+| A05 | Stealth patches | `navigator.webdriver=undefined` + plugins fake + `languages` fake |
+| A06 | Canvas noise + WebGL spoof | `toDataURL` perturbato + `getParameter` → NVIDIA finto |
+| A07 | Tor exit node | Iniezione `ip_meta.is_tor=true` |
+
+### Metrica e criterio di accettazione
+
+```
+detection_rate = (challenge + block) / totale_probe
+bypass_rate    = allow / totale_probe
+```
+
+Exit code ≠ 0 se `detection_rate < --min-detection` (default **0.90**).
+
+### Esecuzione locale
+
+```bash
+cd bitm-plugin
+
+# 1. Deps e browser
+pip install -r tests/e2e_playwright/requirements-e2e.txt
+python -m playwright install --with-deps chromium
+
+# 2. Server (stub = no LLM reale necessario)
+LLM_BACKEND=stub python run.py &
+
+# 3. Suite E2E
+python tests/e2e_playwright/run_e2e.py \
+    --url http://localhost:8000 \
+    --min-detection 0.90 \
+    --report tests/e2e_playwright/e2e_report.json
+```
+
+Output:
+
+```
+BitM E2E Playwright v7.1 — Report finale
+  Tecniche di evasione:   7
+  Probe totali:           15
+  Detected (chal+block):  15  (100.0%)
+  Bypassed (allow):       0   (0.0%)
+  Soglia minima richiesta: 90%
+  [A01] PASS  detected=2/2  bypassed=0  Plain headless (baseline)
+  [A02] PASS  detected=3/3  bypassed=0  UA rotation mid-session
+  …
+✓ Detection rate 100.0% >= soglia 90%
+```
+
+### GitHub Actions
+
+Il workflow `.github/workflows/e2e-playwright.yml` parte su push/PR toccando `bitm-plugin/**` (o via `workflow_dispatch` con override della soglia):
+
+1. Setup Python 3.11 + cache pip
+2. Installa `requirements.txt` + `requirements-e2e.txt`
+3. `playwright install --with-deps chromium`
+4. Avvia `python run.py` in background con `LLM_BACKEND=stub`, attende `/health`
+5. Esegue `run_e2e.py` con `--min-detection 0.90`
+6. Upload di `e2e_report.json` + `api.log` come artefatto (sempre)
+7. Kill del processo API
+
+Per usare un LLM reale in CI: aggiungere il secret `ANTHROPIC_API_KEY`, impostare `LLM_BACKEND: anthropic` ed esportare la env dal secret.
+
+### Backend `stub` dello scorer
+
+Per evitare dipendenze esterne in CI e sblocccare detection_rate significativi, `app/scorer.py` espone un terzo backend **`stub`** (oltre ad `anthropic` e `ollama`) che calcola verdict e score in modo deterministico a partire da `pre_risk_score` + `confirmed_signals` + `headless_signals` dell'extractor. Nessuna rete, nessuna chiave. Attivabile con `LLM_BACKEND=stub`.
+
+---
+
 ## 🧪 Test
 
 La test suite copre **32 scenari** suddivisi in 5 categorie:
@@ -684,6 +769,12 @@ Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` 
 ---
 
 ## 📦 Changelog
+
+### v7.1 — work in progress (E2E evasive + CI)
+- **E2E Playwright** (`bitm-plugin/tests/e2e_playwright/run_e2e.py`): 7 tecniche di evasione reali (UA rotation, timing sub-human, no-static, stealth patches, canvas noise, WebGL spoof, Tor) eseguite su Chromium headless con init-script e route-blocking
+- **Metrica di accettazione**: `detection_rate = (challenge+block)/totale`, exit ≠ 0 se < `--min-detection` (default 0.90). Report JSON persistito su disco
+- **CI GitHub Actions** (`.github/workflows/e2e-playwright.yml`): pipeline completa (setup Python → `playwright install chromium` → `run.py` in background → `run_e2e.py` → upload artefatto) su push/PR per `bitm-plugin/**` + `workflow_dispatch` con soglia override
+- **Backend `stub` scorer** (`app/scorer.py` + `app/config.py`): aggiunto terzo backend deterministico (oltre `anthropic`/`ollama`) per CI e dev senza credenziali. Derivato esclusivamente da `pre_risk_score` + segnali dell'extractor
 
 ### v7.0 — work in progress (infrastruttura training)
 - **System prompt compatto** (`app/scorer.py`): riscrittura del `SYSTEM_PROMPT` in versione v7 — 609 caratteri vs 1080 della v6 (~43% in meno), direttive essenziali preservate, rationale documentato inline

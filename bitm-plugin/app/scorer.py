@@ -63,6 +63,8 @@ Vincolo: se pre_risk_score>=0.65 con segnali confermati, non scendere sotto 0.65
 def get_selected_model() -> str:
     if LLM_BACKEND == "ollama":
         return f"ollama/{OLLAMA_MODEL}"
+    if LLM_BACKEND == "stub":
+        return "stub/deterministic"
     return _selected_model or "anthropic/?"
 
 
@@ -418,20 +420,55 @@ async def _score_ollama(features: dict) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Backend stub (deterministico) — usato in CI / E2E / dev senza LLM reale.
+# Non fa rete, deriva score e verdict dai segnali già calcolati da extractor.
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _score_stub(features: dict) -> dict:
+    pre = float(features.get("pre_risk_score", 0.0))
+    confirmed = list(features.get("confirmed_signals") or [])
+    headless_sig = list(features.get("headless_signals") or [])
+
+    # Se ci sono segnali confermati ma pre_score è basso, alza a soglia sospetta
+    score = pre
+    if confirmed and score < 0.5:
+        score = 0.5
+    if headless_sig and score < 0.65:
+        score = 0.65
+
+    if score >= 0.65:
+        verdict = "ATTACK"
+    elif score >= 0.31:
+        verdict = "SUSPICIOUS"
+    else:
+        verdict = "LEGITIMATE"
+
+    return {
+        "risk_score":  round(min(1.0, max(0.0, score)), 3),
+        "verdict":     verdict,
+        "confidence":  "high" if confirmed or headless_sig else "low",
+        "indicators":  (confirmed + headless_sig)[:6],
+        "explanation": "stub scorer deterministico (pre_risk_score + segnali)",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry point pubblico
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def score_session(features: dict) -> dict:
     """
     Punto di ingresso unico per lo scoring LLM.
-    Seleziona automaticamente Anthropic o Ollama in base a LLM_BACKEND.
+    Seleziona automaticamente Anthropic / Ollama / stub in base a LLM_BACKEND.
     """
     cache_key = f"{features.get('canvas_hash','x')}:{features.get('user_agent','')[:60]}"
     cached = _cache_get(cache_key)
     if cached:
         return {**cached, "_from_cache": True}
 
-    if LLM_BACKEND == "ollama":
+    if LLM_BACKEND == "stub":
+        result = await _score_stub(features)
+    elif LLM_BACKEND == "ollama":
         result = await _score_ollama(features)
     else:
         result = await _score_anthropic(features)
