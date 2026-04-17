@@ -8,11 +8,16 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 > **In preparazione: 7.0** — infrastruttura di fine-tuning LoRA per LLaMA 3.1 (`bitm-plugin/training/`) e system prompt compatto (~40% più corto) per ridurre la latenza di inferenza.
 >
 > **In preparazione: 7.1** — suite E2E Playwright (`bitm-plugin/tests/e2e_playwright/`) che simula attacchi evasivi reali (UA rotation, input sub-human, stealth patches, canvas/WebGL spoof, …) + workflow GitHub Actions (`.github/workflows/e2e-playwright.yml`) con soglia detection ≥ 90%. Backend `stub` deterministico in `scorer.py` per CI senza LLM reale.
+>
+> **In preparazione: 7.2** — rilevamento specifico degli stack BitM e BitM+ documentati nella letteratura scientifica. Firme per **noVNC + WebSockify + TigerVNC** (RFB), **Apache Guacamole + FreeRDP** (RDP), e l'intero stack **BitM+** (ngrok tunnel + Node/Express MalSrv + Puppeteer + reflected XSS + `evilGet()` override della WebAuthn API). Riferimenti: Tommasi 2021 (IJIS), Tzschoppe & Löhr 2023 (EuroSec), Catalano 2025 (J. Computer Virology).
+>
+> **In preparazione: 7.3** — distribuzione one-shot: `Dockerfile` + `docker-compose.yml` in root, immagine pubblicata su **GHCR**, collector JS standalone servito da `GET /collector.js` per integrazione `<script>`-only. Default `LLM_BACKEND=stub` → zero configurazione necessaria per demo e ricerca.
 
 ---
 
 ## Indice
 
+- [⚡ Quickstart](#-quickstart-v73)
 - [Caratteristiche](#-caratteristiche)
 - [Come funziona](#-come-funziona)
 - [Struttura del progetto](#-struttura-del-progetto)
@@ -31,7 +36,59 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Fine-tuning LoRA (v7.0)](#-fine-tuning-lora-v70)
 - [E2E Playwright + CI (v7.1)](#-e2e-playwright--ci-v71)
 - [Test](#-test)
+- [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
+- [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
 - [Changelog](#-changelog)
+
+---
+
+## ⚡ Quickstart (v7.3)
+
+Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvio grazie al backend `stub` deterministico.
+
+### A. Provalo subito con Docker (~30 secondi)
+
+```bash
+git clone <repo-url> && cd Bitm_LLM
+docker compose up --build
+```
+
+Apri `http://localhost:8000/` per la pagina di test e `http://localhost:8000/dashboard` per la dashboard real-time.
+Nessuna configurazione necessaria: il servizio parte con `LLM_BACKEND=stub` (scorer deterministico basato su `pre_risk_score` + segnali BitM/BitM+).
+
+Per usare un LLM reale:
+
+```bash
+# Anthropic cloud (richiede API key)
+LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
+
+# Ollama locale (nessun costo ricorrente)
+docker compose --profile ollama up
+docker exec -it bitm-ollama ollama pull llama3.1
+LLM_BACKEND=ollama docker compose --profile ollama up
+```
+
+### B. Integrazione one-liner su un sito esistente
+
+Una volta avviato il backend (locale o remoto), aggiungi questo tag al sito da proteggere:
+
+```html
+<script src="https://<host>:8000/collector.js"
+        data-endpoint="https://<host>:8000/api/bitm/collect"
+        data-auto="true"></script>
+```
+
+Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, marker BitM/BitM+) e invia a `/api/bitm/collect` al caricamento della pagina. L'oggetto `window.BitM` espone `BitM.classify()`, `BitM.fingerprint()` e `BitM.onResult(fn)` per integrazioni programmatiche.
+
+### C. Ricercatori e studenti
+
+```bash
+docker run --rm -p 8000:8000 ghcr.io/<owner>/bitm-llm:latest
+```
+
+Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
+
+---
 
 ---
 
@@ -51,6 +108,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 | **Dashboard WebSocket** | Feed live eventi + ring buffer 500 slot + chart + export CSV |
 | **Webhook push** | Notifica HTTP POST asincrona verso Slack / Teams / SIEM ad ogni BLOCK |
 | **Fine-tuning LoRA** | Pipeline di conversione `bitm_events.jsonl → dataset ChatML` + training LoRA di LLaMA 3.1 |
+| **Rilevamento BitM/BitM+** | Firme specifiche per noVNC/WebSockify/TigerVNC (RFB), Apache Guacamole/FreeRDP (RDP), ngrok/Puppeteer/MalSrv/evilGet (BitM+) |
 
 ---
 
@@ -331,6 +389,19 @@ Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed
 ```json
 {
   "ip_meta": { "is_tor": true, "is_vpn": false, "country": "US" }
+}
+```
+
+**Campi opzionali per il rilevamento BitM/BitM+ (v7.2)** — se il collector lato sito li fornisce, entrano nelle firme; se mancano vengono semplicemente ignorati (vedi §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm-v72)):
+
+```json
+{
+  "pageUrl":   "https://example.com/login",
+  "referrer":  "https://example.com/",
+  "title":     "Login",
+  "wsEndpoints": ["wss://example.com/notify"],
+  "iframeCount": 0,
+  "credentialsGetNative": true
 }
 ```
 
@@ -720,15 +791,15 @@ Per evitare dipendenze esterne in CI e sblocccare detection_rate significativi, 
 
 ## 🧪 Test
 
-La test suite copre **32 scenari** suddivisi in 5 categorie:
+La test suite copre **41 scenari** suddivisi in 5 categorie:
 
 | Categoria | N° | Scenari |
 |-----------|----|---------|
 | `legit` | 5 | Chrome/Windows, Firefox/macOS, Safari/iPhone, Edge/Windows, Chrome Android |
-| `attack` | 6 | HeadlessChrome, Playwright+SwiftShader, Selenium, Tor, Puppeteer, latenza estrema |
-| `suspicious` | 5 | VPN+login, latenza alta+payment, VPN+canvas vuoto, timezone anomala, risoluzione sospetta |
-| `edge` | 4 | Payload minimo, UA unicode, static asset, path sconosciuto |
-| `system` | 12 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field, webhook non-blocking, **prompt v7 compatto, dataset builder, train LoRA CLI** |
+| `attack` | 13 | HeadlessChrome, Playwright+SwiftShader, Selenium, Tor, Puppeteer, latenza estrema + **T21–T27** BitM/BitM+ (noVNC title, Guacamole title, xssPayload URL, evilGet override, MalSrv port, noVNC UA leak, ngrok WS) |
+| `suspicious` | 6 | VPN+login, latenza alta+payment, VPN+canvas vuoto, timezone anomala, risoluzione sospetta, **T28 ngrok-dev+login** |
+| `edge` | 5 | Payload minimo, UA unicode, static asset, path sconosciuto, **T29 WebAuthn API nativa** |
+| `system` | 13 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field, webhook non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13 allineamento label BitM** |
 
 ### Esecuzione
 
@@ -765,10 +836,139 @@ Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` 
 | **S10** | **Prompt v7 ≤ 650 caratteri e direttive essenziali preservate (JSON/LEGITIMATE/SUSPICIOUS/ATTACK/pre_risk_score/BitM)** |
 | **S11** | **`build_dataset.py` su fixture: scarta `from_cache` e `api_error`, conserva le 3 classi, emette ChatML (system/user/assistant) con target JSON valido** |
 | **S12** | **`train_lora.py --help` termina con exit 0 ed espone tutti i flag principali (`--dataset-dir`, `--base-model`, `--output-dir`, `--lora-r`, `--lora-alpha`, `--no-4bit`)** |
+| **S13** | **Label BitM/BitM+ allineati fra `extractor._detect_bitm` e `policy.CRITICAL_BLOCK` (regressione su v7.2)** |
+
+---
+
+## 🕵️ Rilevamento BitM / BitM+ (v7.2)
+
+Questa versione aggiunge un livello di rilevamento **specifico per gli stack di attacco BitM / BitM+ documentati in letteratura**, al di sopra del fingerprinting generico di headless / automation.
+
+### Minaccia — riepilogo tecnico
+
+| Variante | Tooling attaccante | Riferimento |
+|---------|--------------------|-------------|
+| **BitM — RFB variant** | noVNC (client JS) + WebSockify (WS↔RFB proxy) + TigerVNC (server Linux con Firefox fullscreen) | Tommasi 2021, Tzschoppe 2023 §4.1 |
+| **BitM — RDP variant** | Apache Guacamole (web client su Tomcat) + estensione NoAuth + FreeRDP + Windows RDP server | Tzschoppe 2023 §4.2 |
+| **BitM+** | Docker BE: Node.js + Express.js (**MalSrv** su `:3081`) + Puppeteer-controlled Chromium + noVNC (`:6080`) esposto via **ngrok HTTPS tunnel** (HTTPS richiesto da WebAuthn); **xssPayload** riflesso nell'URL (`xURL`) che sovrascrive `navigator.credentials.get()` con `evilGet()` per inoltrare la challenge FIDO2/WebAuthn a V | Catalano 2025 |
+
+### Firme rilevate
+
+Il plugin estrae 9 nuovi segnali diagnostici da campi opzionali del payload (il collector lato client può fornirli o no — i campi mancanti semplicemente non contribuiscono):
+
+| Segnale | Trigger | Peso pre-score | Severità |
+|---------|---------|----------------|----------|
+| `novnc_client_marker` | `document.title` contiene `noVNC` / `Websockify` | +0.80 | **CRITICAL → BLOCK** |
+| `guacamole_client_marker` | `document.title` contiene `Guacamole` | +0.80 | **CRITICAL → BLOCK** |
+| `bitm_framework_ua` | User-Agent contiene `noVNC` / `websockify` / `guacamole` / `tigervnc` (PoC non-stealth) | +0.80 | **CRITICAL → BLOCK** |
+| `bitm_backend_port` | URL pagina/referrer su porte BE BitM+ (`:3081` Express MalSrv, `:6080` noVNC, `:4822` Guacamole Tomcat, `:5900` VNC) | +0.78 | **CRITICAL → BLOCK** |
+| `xss_reflected_param` | URL contiene payload XSS: `<script`, `onerror=`, `javascript:`, `document.createElement`, `appendChild`, `loadFromAttacker`, `eval(`, `fromCharCode` | +0.70 | **CRITICAL → BLOCK** |
+| `webauthn_api_override` | `navigator.credentials.get.toString()` non è `[native code]` → probabile `evilGet()` (BitM+) | +0.70 | **CRITICAL → BLOCK** |
+| `bitm_websocket_transport` | WS endpoint su host tunneling, porta BE, o path `/websockify`, `/vnc`, `/guacamole` | +0.55 | **CRITICAL → BLOCK** |
+| `tunnel_host` | `pageUrl` o `referrer` su tunnel HTTPS (`*.ngrok.io`, `*.ngrok-free.app`, `*.ngrok.app`, `*.ngrok.dev`, `*.trycloudflare.com`, `*.loca.lt`, `*.localtunnel.me`, `*.serveo.net`) | +0.25 | weak — amplifica su login/payment/admin |
+| `iframe_overlay` | ≥ 3 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
+
+### Come arrivare alle firme dal client
+
+Il plugin è agnostico rispetto al collector. Un collector JavaScript lato sito può facilmente aggiungere questi campi al POST `/api/bitm/collect`:
+
+```js
+// client-side snippet
+fetch('/api/bitm/collect', { method: 'POST', body: JSON.stringify({
+  // ... i campi esistenti (userAgent, plugins, webgl, canvas, …)
+  pageUrl:  window.location.href,
+  referrer: document.referrer,
+  title:    document.title,
+  iframeCount: document.getElementsByTagName('iframe').length,
+  credentialsGetNative: (navigator.credentials?.get
+      ? /\[native code\]/.test(Function.prototype.toString.call(navigator.credentials.get))
+      : null),
+  // wsEndpoints: lista degli URL WS aperti (se il collector li traccia)
+})});
+```
+
+### Campi `CRITICAL_BLOCK` e fast-path
+
+I label BitM/BitM+ sono replicati su tre livelli per coerenza architetturale:
+
+1. `app/extractor.py::_detect_bitm` — produce i label
+2. `app/policy.py::CRITICAL_BLOCK` — forza BLOCK quando uno di questi compare negli `indicators` (unione di LLM + extractor)
+3. `app/main.py::_fast_rules` — propaga i label già calcolati dall'extractor nel fast-path, evitando la chiamata LLM
+
+Il system check **S13** verifica che i 3 insiemi restino allineati in CI.
+
+### Casi di test dedicati (T21–T29)
+
+| ID | Scenario | Atteso |
+|----|----------|--------|
+| T21 | BitM RFB — `title="Login - noVNC"` + `pageUrl` ngrok | `block` |
+| T22 | BitM RDP — `title="Apache Guacamole"` + porta `:8080` | `block` |
+| T23 | BitM+ — xURL con `?xssParam={loadFromAttacker(...)}` | `block` |
+| T24 | BitM+ — `credentialsGetNative=false` → `evilGet()` | `block` |
+| T25 | BitM+ — `pageUrl` su `:6080`, `referrer` su `:3081/getChallenge` | `block` |
+| T26 | BitM — UA contiene `noVNC/1.4.0` (PoC non-stealth) | `block` |
+| T27 | BitM+ — `wsEndpoints=["wss://...ngrok.../websockify"]` | `block` |
+| T28 | Dev ngrok legittimo su `/login` | `challenge` o `block` |
+| T29 | `credentialsGetNative=true` → WebAuthn API nativa | `allow` |
+
+### Limiti noti
+
+- L'attaccante può **mascherare il `document.title`** (Tzschoppe 2023 segnala che basta rimuovere il suffisso `-noVNC` dalla build di noVNC, e Guacamole permette l'override del thumbnail). I marker di titolo sono quindi firme "a bassa difesa": utili su PoC e operatori distratti, non su APT. I segnali **forti indipendenti dalla collaborazione dell'attaccante** sono `tunnel_host`, `xss_reflected_param`, `webauthn_api_override` e `bitm_backend_port`.
+- `tunnel_host` da solo **non** blocca (ngrok è legittimo in sviluppo): richiede coincidenza con un contesto sensibile (`login`/`payment`/`admin`) o con un altro segnale BitM.
+- L'override di `navigator.credentials.get` richiede che il collector sia eseguito **dopo** il payload XSS — su una pagina BitM+ pulita, prima dell'injection, il segnale può non scattare. La difesa raccomandata rimane l'attestation/subject-verification lato Relying Party (cfr. Catalano 2025 §6).
+
+---
+
+## 📦 Distribuzione Docker + collector.js (v7.3)
+
+Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici principali — sviluppatori che integrano su un sito esistente, utenti non-tecnici che vogliono provarlo subito, ricercatori che studiano BitM. Prima di v7.3 l'onboarding richiedeva ≥ 6 passaggi (pip install, API key, run.py, snippet JS da copiare a mano); ora è un singolo `docker compose up` oppure un singolo `<script>` tag.
+
+### File aggiunti
+
+- `bitm-plugin/Dockerfile` — `python:3.13-slim`, utente non-root `bitm`, healthcheck integrato su `/health`, `CMD` diretto a `uvicorn` (no `--reload`)
+- `bitm-plugin/.dockerignore` — esclude `__pycache__/`, `.env`, `tests/`, `doc/`, `bitm_events.jsonl`, artefatti IDE
+- `docker-compose.yml` (root) — servizio `api` di default + profili opzionali `redis` e `ollama`
+- `bitm-plugin/app/static/collector.js` — collector vanilla JS (~140 righe, nessuna dipendenza), legge `data-endpoint`/`data-page`/`data-auto` dal tag `<script>`, espone `window.BitM`
+- `.github/workflows/docker-publish.yml` — build multi-arch (`amd64`/`arm64`) + push su `ghcr.io/<owner>/bitm-llm:{latest,sha-...,vX.Y.Z}` a ogni push su `master`/tag `v*`
+
+### File modificati
+
+- `bitm-plugin/app/config.py` — `LLM_BACKEND` default `anthropic` → `stub`. Chi vuole LLM reale passa esplicitamente `LLM_BACKEND=anthropic|ollama`
+- `bitm-plugin/app/main.py` — nuovo endpoint `GET /collector.js` (MIME `application/javascript`, cache 1h)
+- `bitm-plugin/.env.example` — riordinato per promuovere `stub` come prima opzione
+- `bitm-plugin/tests/run_tests.py` — nuovo **S14 `sys_collector_js_endpoint`**: verifica 200, MIME JS, stringhe `/api/bitm/collect` e `window.BitM` nel body. Totale test 41 → 42
+
+### API del collector JS
+
+```js
+// Dopo che lo <script> è stato caricato:
+BitM.classify()       // → Promise<{action, score, verdict, indicators, reason, ...}>
+BitM.fingerprint()    // → Promise<Fingerprint> (senza invio al server)
+BitM.onResult(fn)     // listener chiamato a ogni classify()
+BitM.endpoint         // → URL configurato via data-endpoint
+```
+
+Il collector aggiunge campi opzionali per il rilevamento BitM/BitM+ che `extractor.py::_detect_bitm` legge: `documentTitle`, `locationSearch` (→ `pageUrl`), `webauthnOverridden` (→ `credentialsGetNative=false`), `iframeOverlay`, `wsTransport`.
 
 ---
 
 ## 📦 Changelog
+
+### v7.3 — work in progress (distribuzione one-shot)
+- **Docker** (`bitm-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
+- **Collector standalone** (`bitm-plugin/app/static/collector.js` + `GET /collector.js` in `app/main.py`): integrazione one-liner via `<script src=".../collector.js" data-endpoint="..." data-auto="true">`. Espone `window.BitM` con `classify()`, `fingerprint()`, `onResult(fn)`
+- **Default `LLM_BACKEND=stub`** (`app/config.py`): eliminata la necessità di una API key per il primo avvio. Lo scorer deterministico `_score_stub` (già presente in v7.1) produce verdetti basati su `pre_risk_score` + segnali BitM/BitM+, sufficiente per demo e ricerca
+- **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/<owner>/bitm-llm` su push/tag. Permette `docker run ghcr.io/<owner>/bitm-llm:latest` da terminale pulito
+- **Test suite**: 41 → 42 casi. Aggiunto **S14 `sys_collector_js_endpoint`** (verifica endpoint `/collector.js`: 200 + MIME JS + stringhe chiave nel body)
+
+
+
+### v7.2 — work in progress (rilevamento BitM/BitM+ specifico)
+- **Firme dedicate agli stack BitM documentati** (`app/extractor.py::_detect_bitm`): 9 nuovi segnali (`novnc_client_marker`, `guacamole_client_marker`, `bitm_framework_ua`, `bitm_backend_port`, `xss_reflected_param`, `webauthn_api_override`, `bitm_websocket_transport`, `tunnel_host`, `iframe_overlay`) estratti da campi opzionali del payload (`pageUrl`, `referrer`, `title`, `wsEndpoints`, `credentialsGetNative`, `iframeCount`)
+- **Allineamento tri-file** di `CRITICAL_BLOCK` (policy) / fast-path (main) / detector (extractor) con nuovo system check **S13** a garanzia
+- **SYSTEM_PROMPT** aggiornato per segnalare gli stack BitM+ all'LLM senza sforare il limite v7.0 (≤ 650 char; attuale 636)
+- **Test suite**: 32 → 41 casi. Aggiunti T21–T29 (noVNC/Guacamole/xssPayload/evilGet/MalSrv port/UA leak/WS tunnel/ngrok-dev/WebAuthn nativa) + S13 (label alignment)
+- **Riferimenti**: Tommasi 2021 (IJIS), Tzschoppe & Löhr 2023 (EuroSec), Catalano 2025 (J. Computer Virology)
 
 ### v7.1 — work in progress (E2E evasive + CI)
 - **E2E Playwright** (`bitm-plugin/tests/e2e_playwright/run_e2e.py`): 7 tecniche di evasione reali (UA rotation, timing sub-human, no-static, stealth patches, canvas noise, WebGL spoof, Tor) eseguite su Chromium headless con init-script e route-blocking

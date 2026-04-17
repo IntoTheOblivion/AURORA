@@ -32,13 +32,25 @@ THRESHOLDS = {
 
 
 # ── Segnali → BLOCK immediato ─────────────────────────────────────────────────
+# I label BitM/BitM+ sono allineati con extractor._detect_bitm e con i fast_rules
+# in main.py (label-set identici su entrambi i lati per il "short-circuit").
 CRITICAL_BLOCK = frozenset({
+    # Automation / headless
     "headlesschrome_ua", "phantomjs_ua", "slimerjs_ua", "jsdom_ua",
     "webdriver_true",
     "headless_ua", "webdriver_flag",
     "no_plugins_no_webgl",
     "extreme_latency",
     "tor_exit_node",
+    # BitM / BitM+ — stack documentati in Tommasi 2021, Tzschoppe 2023,
+    # Catalano 2025 (vedi README §Segnali BitM/BitM+).
+    "novnc_client_marker",      # document.title "noVNC"
+    "guacamole_client_marker",  # document.title "Guacamole"
+    "bitm_framework_ua",        # UA rivela noVNC/Websockify/Guacamole/TigerVNC
+    "bitm_backend_port",        # :3081/:6080/:4822/:5900 visibili al client
+    "xss_reflected_param",      # xURL con loadFromAttacker/onerror/<script>
+    "webauthn_api_override",    # navigator.credentials.get non nativo → evilGet
+    "bitm_websocket_transport", # WebSocket su dominio tunneling o websockify
 })
 
 # ── Segnali deboli che amplificano lo score in contesti sensibili ─────────────
@@ -53,6 +65,10 @@ _AMPLIFIER_WEIGHTS: dict[str, float] = {
     "no_timezone":           0.06,
     "suspicious_resolution": 0.06,
     "timezone_anomaly":      0.12,   # UTC + lingua non-EN su admin è genuinamente sospetto
+    # BitM+ infrastruttura "debole" (ngrok può essere legittimo in dev):
+    # alzare soglia su login/payment/admin, non sufficiente da solo in default.
+    "tunnel_host":           0.18,
+    "iframe_overlay":        0.10,
 }
 # Cap: il boost totale non può superare questo valore
 # → impedisce che combinazioni di segnali deboli superino la soglia BLOCK
