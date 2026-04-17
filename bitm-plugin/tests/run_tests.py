@@ -540,23 +540,27 @@ def _headless_payload(sid: str, page: str = "/login") -> dict:
 
 
 async def sys_health(client: httpx.AsyncClient, base: str) -> dict:
-    """S01 — /health deve esporre versione 6.x, store, GeoIP e webhook."""
+    """S01 — /health deve esporre versione, store, GeoIP e webhook."""
     passed, detail = True, []
     try:
         r = await client.get(f"{base}/health", timeout=5)
         j = r.json()
-        if not str(j.get("version", "")).startswith("6."):
-            passed = False; detail.append(f"versione non 6.x ({j.get('version')})")
+        # Accetta qualunque versione stabile documentata (v6+). Rifiuta solo versioni
+        # manifestamente non aggiornate (<6.) o mancanti.
+        version = str(j.get("version", ""))
+        major = version.split(".")[0] if version else ""
+        if not major.isdigit() or int(major) < 6:
+            passed = False; detail.append(f"versione non riconosciuta ({version!r})")
         for k in ("store", "geoip", "sessions", "blocked_ips", "webhook"):
             if k not in j:
                 passed = False; detail.append(f"manca campo {k}")
         return {"id": "S01", "cat": "system",
-                "name": "Health esposto v6.2 (store/geoip/webhook)",
+                "name": "Health esposto (version/store/geoip/webhook)",
                 "passed": passed, "detail": "; ".join(detail) or "ok",
                 "extra": j}
     except Exception as e:
         return {"id": "S01", "cat": "system",
-                "name": "Health esposto v6.2 (store/geoip/webhook)",
+                "name": "Health esposto (version/store/geoip/webhook)",
                 "passed": False, "detail": f"errore: {e}"}
 
 

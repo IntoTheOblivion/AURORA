@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-17T10:40:24.302702",
+  "timestamp": "2026-04-17T11:18:29.739663",
   "version": "7.2",
   "passed": 14,
   "total": 14,
@@ -9,12 +9,12 @@
     {
       "id": "S01",
       "cat": "system",
-      "name": "Health esposto v6.2 (store/geoip/webhook)",
+      "name": "Health esposto (version/store/geoip/webhook)",
       "passed": true,
       "detail": "ok",
       "extra": {
         "status": "ok",
-        "version": "6.2.0",
+        "version": "7.3.0",
         "backend": "stub",
         "model": "stub/deterministic",
         "sessions": 0,
@@ -39,7 +39,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.222 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.8 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -67,7 +67,7 @@
       "cat": "system",
       "name": "Cache LLM velocizza richieste successive",
       "passed": true,
-      "detail": "primo=0.1ms secondo=0.1ms"
+      "detail": "primo=0.2ms secondo=0.1ms"
     },
     {
       "id": "S08",
@@ -84,7 +84,7 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=49ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=53ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",
