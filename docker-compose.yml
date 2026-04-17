@@ -1,0 +1,50 @@
+# BitM Detection Plugin — docker-compose one-shot
+#
+# Usage:
+#   docker compose up                         # solo api (backend stub, zero-config)
+#   docker compose --profile redis up         # api + redis (sessioni persistenti multi-worker)
+#   docker compose --profile ollama up        # api + ollama (LLM locale, no API key)
+#   docker compose --profile redis --profile ollama up   # stack completo
+#
+# Variabili d'ambiente:
+#   LLM_BACKEND=stub|anthropic|ollama   (default: stub)
+#   ANTHROPIC_API_KEY=sk-ant-...        (solo se LLM_BACKEND=anthropic)
+
+services:
+  api:
+    build:
+      context: ./bitm-plugin
+    image: bitm-llm:local
+    container_name: bitm-api
+    ports:
+      - "8000:8000"
+    environment:
+      LLM_BACKEND: ${LLM_BACKEND:-stub}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+      REDIS_URL: ${REDIS_URL:-}
+      PORT: "8000"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: bitm-redis
+    profiles: ["redis"]
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bitm-ollama
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama-models:

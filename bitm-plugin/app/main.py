@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import LLM_BACKEND, summary as config_summary, validate as config_validate
@@ -88,6 +88,22 @@ async def index():
     if not p.exists():
         raise HTTPException(404, detail="test_page.html non trovato")
     return p.read_text(encoding="utf-8")
+
+
+@app.get("/collector.js")
+async def collector():
+    """
+    Collector JS standalone per integrazione one-liner.
+    Esposto con MIME JS e cache pubblica (1h) per permettere il caching a CDN/proxy.
+    """
+    p = STATIC_DIR / "collector.js"
+    if not p.exists():
+        raise HTTPException(404, detail="collector.js non trovato")
+    return Response(
+        content=p.read_text(encoding="utf-8"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @app.get("/health")

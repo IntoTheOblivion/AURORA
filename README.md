@@ -10,11 +10,14 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 > **In preparazione: 7.1** — suite E2E Playwright (`bitm-plugin/tests/e2e_playwright/`) che simula attacchi evasivi reali (UA rotation, input sub-human, stealth patches, canvas/WebGL spoof, …) + workflow GitHub Actions (`.github/workflows/e2e-playwright.yml`) con soglia detection ≥ 90%. Backend `stub` deterministico in `scorer.py` per CI senza LLM reale.
 >
 > **In preparazione: 7.2** — rilevamento specifico degli stack BitM e BitM+ documentati nella letteratura scientifica. Firme per **noVNC + WebSockify + TigerVNC** (RFB), **Apache Guacamole + FreeRDP** (RDP), e l'intero stack **BitM+** (ngrok tunnel + Node/Express MalSrv + Puppeteer + reflected XSS + `evilGet()` override della WebAuthn API). Riferimenti: Tommasi 2021 (IJIS), Tzschoppe & Löhr 2023 (EuroSec), Catalano 2025 (J. Computer Virology).
+>
+> **In preparazione: 7.3** — distribuzione one-shot: `Dockerfile` + `docker-compose.yml` in root, immagine pubblicata su **GHCR**, collector JS standalone servito da `GET /collector.js` per integrazione `<script>`-only. Default `LLM_BACKEND=stub` → zero configurazione necessaria per demo e ricerca.
 
 ---
 
 ## Indice
 
+- [⚡ Quickstart](#-quickstart-v73)
 - [Caratteristiche](#-caratteristiche)
 - [Come funziona](#-come-funziona)
 - [Struttura del progetto](#-struttura-del-progetto)
@@ -34,7 +37,58 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [E2E Playwright + CI (v7.1)](#-e2e-playwright--ci-v71)
 - [Test](#-test)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
+- [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
 - [Changelog](#-changelog)
+
+---
+
+## ⚡ Quickstart (v7.3)
+
+Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvio grazie al backend `stub` deterministico.
+
+### A. Provalo subito con Docker (~30 secondi)
+
+```bash
+git clone <repo-url> && cd Bitm_LLM
+docker compose up --build
+```
+
+Apri `http://localhost:8000/` per la pagina di test e `http://localhost:8000/dashboard` per la dashboard real-time.
+Nessuna configurazione necessaria: il servizio parte con `LLM_BACKEND=stub` (scorer deterministico basato su `pre_risk_score` + segnali BitM/BitM+).
+
+Per usare un LLM reale:
+
+```bash
+# Anthropic cloud (richiede API key)
+LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
+
+# Ollama locale (nessun costo ricorrente)
+docker compose --profile ollama up
+docker exec -it bitm-ollama ollama pull llama3.1
+LLM_BACKEND=ollama docker compose --profile ollama up
+```
+
+### B. Integrazione one-liner su un sito esistente
+
+Una volta avviato il backend (locale o remoto), aggiungi questo tag al sito da proteggere:
+
+```html
+<script src="https://<host>:8000/collector.js"
+        data-endpoint="https://<host>:8000/api/bitm/collect"
+        data-auto="true"></script>
+```
+
+Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, marker BitM/BitM+) e invia a `/api/bitm/collect` al caricamento della pagina. L'oggetto `window.BitM` espone `BitM.classify()`, `BitM.fingerprint()` e `BitM.onResult(fn)` per integrazioni programmatiche.
+
+### C. Ricercatori e studenti
+
+```bash
+docker run --rm -p 8000:8000 ghcr.io/<owner>/bitm-llm:latest
+```
+
+Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
+
+---
 
 ---
 
@@ -865,7 +919,49 @@ Il system check **S13** verifica che i 3 insiemi restino allineati in CI.
 
 ---
 
+## 📦 Distribuzione Docker + collector.js (v7.3)
+
+Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici principali — sviluppatori che integrano su un sito esistente, utenti non-tecnici che vogliono provarlo subito, ricercatori che studiano BitM. Prima di v7.3 l'onboarding richiedeva ≥ 6 passaggi (pip install, API key, run.py, snippet JS da copiare a mano); ora è un singolo `docker compose up` oppure un singolo `<script>` tag.
+
+### File aggiunti
+
+- `bitm-plugin/Dockerfile` — `python:3.13-slim`, utente non-root `bitm`, healthcheck integrato su `/health`, `CMD` diretto a `uvicorn` (no `--reload`)
+- `bitm-plugin/.dockerignore` — esclude `__pycache__/`, `.env`, `tests/`, `doc/`, `bitm_events.jsonl`, artefatti IDE
+- `docker-compose.yml` (root) — servizio `api` di default + profili opzionali `redis` e `ollama`
+- `bitm-plugin/app/static/collector.js` — collector vanilla JS (~140 righe, nessuna dipendenza), legge `data-endpoint`/`data-page`/`data-auto` dal tag `<script>`, espone `window.BitM`
+- `.github/workflows/docker-publish.yml` — build multi-arch (`amd64`/`arm64`) + push su `ghcr.io/<owner>/bitm-llm:{latest,sha-...,vX.Y.Z}` a ogni push su `master`/tag `v*`
+
+### File modificati
+
+- `bitm-plugin/app/config.py` — `LLM_BACKEND` default `anthropic` → `stub`. Chi vuole LLM reale passa esplicitamente `LLM_BACKEND=anthropic|ollama`
+- `bitm-plugin/app/main.py` — nuovo endpoint `GET /collector.js` (MIME `application/javascript`, cache 1h)
+- `bitm-plugin/.env.example` — riordinato per promuovere `stub` come prima opzione
+- `bitm-plugin/tests/run_tests.py` — nuovo **S14 `sys_collector_js_endpoint`**: verifica 200, MIME JS, stringhe `/api/bitm/collect` e `window.BitM` nel body. Totale test 41 → 42
+
+### API del collector JS
+
+```js
+// Dopo che lo <script> è stato caricato:
+BitM.classify()       // → Promise<{action, score, verdict, indicators, reason, ...}>
+BitM.fingerprint()    // → Promise<Fingerprint> (senza invio al server)
+BitM.onResult(fn)     // listener chiamato a ogni classify()
+BitM.endpoint         // → URL configurato via data-endpoint
+```
+
+Il collector aggiunge campi opzionali per il rilevamento BitM/BitM+ che `extractor.py::_detect_bitm` legge: `documentTitle`, `locationSearch` (→ `pageUrl`), `webauthnOverridden` (→ `credentialsGetNative=false`), `iframeOverlay`, `wsTransport`.
+
+---
+
 ## 📦 Changelog
+
+### v7.3 — work in progress (distribuzione one-shot)
+- **Docker** (`bitm-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
+- **Collector standalone** (`bitm-plugin/app/static/collector.js` + `GET /collector.js` in `app/main.py`): integrazione one-liner via `<script src=".../collector.js" data-endpoint="..." data-auto="true">`. Espone `window.BitM` con `classify()`, `fingerprint()`, `onResult(fn)`
+- **Default `LLM_BACKEND=stub`** (`app/config.py`): eliminata la necessità di una API key per il primo avvio. Lo scorer deterministico `_score_stub` (già presente in v7.1) produce verdetti basati su `pre_risk_score` + segnali BitM/BitM+, sufficiente per demo e ricerca
+- **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/<owner>/bitm-llm` su push/tag. Permette `docker run ghcr.io/<owner>/bitm-llm:latest` da terminale pulito
+- **Test suite**: 41 → 42 casi. Aggiunto **S14 `sys_collector_js_endpoint`** (verifica endpoint `/collector.js`: 200 + MIME JS + stringhe chiave nel body)
+
+
 
 ### v7.2 — work in progress (rilevamento BitM/BitM+ specifico)
 - **Firme dedicate agli stack BitM documentati** (`app/extractor.py::_detect_bitm`): 9 nuovi segnali (`novnc_client_marker`, `guacamole_client_marker`, `bitm_framework_ua`, `bitm_backend_port`, `xss_reflected_param`, `webauthn_api_override`, `bitm_websocket_transport`, `tunnel_host`, `iframe_overlay`) estratti da campi opzionali del payload (`pageUrl`, `referrer`, `title`, `wsEndpoints`, `credentialsGetNative`, `iframeCount`)

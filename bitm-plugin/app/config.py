@@ -3,9 +3,9 @@ Config v6 — legge .env e decide quale backend LLM usare.
 
 Variabili supportate:
 
-  LLM_BACKEND=anthropic   (default) usa Anthropic API
+  LLM_BACKEND=stub        (default) scorer deterministico, zero-config
+  LLM_BACKEND=anthropic   usa Anthropic API (richiede ANTHROPIC_API_KEY)
   LLM_BACKEND=ollama      usa Ollama locale
-  LLM_BACKEND=stub        scorer deterministico (CI / E2E / dev senza LLM reale)
 
   # Anthropic
   ANTHROPIC_API_KEY=sk-ant-...
@@ -34,7 +34,7 @@ Variabili supportate:
 import os
 
 # ── Backend selector ──────────────────────────────────────────────────────────
-LLM_BACKEND: str = os.getenv("LLM_BACKEND", "anthropic").strip().lower()
+LLM_BACKEND: str = os.getenv("LLM_BACKEND", "stub").strip().lower()
 
 # ── Anthropic ─────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "").strip()

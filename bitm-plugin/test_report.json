@@ -1,363 +1,10 @@
 {
-  "timestamp": "2026-04-16T19:32:29.264440",
-  "version": "7.0",
-  "passed": 32,
-  "total": 32,
+  "timestamp": "2026-04-17T10:40:24.302702",
+  "version": "7.2",
+  "passed": 14,
+  "total": 14,
   "accuracy": 1.0,
-  "cases": [
-    {
-      "id": "T01",
-      "cat": "legit",
-      "name": "Chrome / Windows / Italia",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "default",
-      "plugin_ms": 3383.5,
-      "total_ms": 3386
-    },
-    {
-      "id": "T02",
-      "cat": "legit",
-      "name": "Firefox / macOS / Italia",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.2; rv:121.0) Gecko/20100101 Firefox/121.0"
-      ],
-      "reason": "Browser normale con User-Agent e plugin OpenH264",
-      "context": "admin",
-      "plugin_ms": 2599.1,
-      "total_ms": 2601
-    },
-    {
-      "id": "T03",
-      "cat": "legit",
-      "name": "Safari / iPhone / Italia (zero plugin = normale)",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "default",
-      "plugin_ms": 1395.3,
-      "total_ms": 1397
-    },
-    {
-      "id": "T04",
-      "cat": "legit",
-      "name": "Edge / Windows / Italia",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "default",
-      "plugin_ms": 1388.8,
-      "total_ms": 1391
-    },
-    {
-      "id": "T05",
-      "cat": "legit",
-      "name": "Chrome Android / timing naturale",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "default",
-      "plugin_ms": 1455.2,
-      "total_ms": 1457
-    },
-    {
-      "id": "T06",
-      "cat": "attack",
-      "name": "HeadlessChrome / Evilginx",
-      "passed": true,
-      "expected": "block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "headless_ua",
-        "webdriver_flag",
-        "no_plugins_no_webgl"
-      ],
-      "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
-      "context": "login",
-      "plugin_ms": 2.0,
-      "total_ms": 4
-    },
-    {
-      "id": "T07",
-      "cat": "attack",
-      "name": "Playwright / webdriver=true / SwiftShader",
-      "passed": true,
-      "expected": "block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "webdriver_flag"
-      ],
-      "reason": "Segnale critico: webdriver_flag, webdriver_true",
-      "context": "login",
-      "plugin_ms": 1.7,
-      "total_ms": 4
-    },
-    {
-      "id": "T08",
-      "cat": "attack",
-      "name": "Selenium / no plugin + no WebGL / desktop",
-      "passed": true,
-      "expected": "block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "no_plugins_no_webgl"
-      ],
-      "reason": "Segnale critico: no_plugins_no_webgl",
-      "context": "payment",
-      "plugin_ms": 2.2,
-      "total_ms": 4
-    },
-    {
-      "id": "T09",
-      "cat": "attack",
-      "name": "Tor exit node / checkout",
-      "passed": true,
-      "expected": "block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "tor_exit_node"
-      ],
-      "reason": "Segnale critico: tor_exit_node",
-      "context": "payment",
-      "plugin_ms": 2.9,
-      "total_ms": 6
-    },
-    {
-      "id": "T10",
-      "cat": "attack",
-      "name": "Puppeteer UA marker",
-      "passed": true,
-      "expected": "block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "headless_ua",
-        "webdriver_flag",
-        "no_plugins_no_webgl"
-      ],
-      "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
-      "context": "admin",
-      "plugin_ms": 1.8,
-      "total_ms": 4
-    },
-    {
-      "id": "T11",
-      "cat": "attack",
-      "name": "Latenza estrema (>600ms) = scraping",
-      "passed": true,
-      "expected": "block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "extreme_latency"
-      ],
-      "reason": "Segnale critico: extreme_latency",
-      "context": "default",
-      "plugin_ms": 2.6,
-      "total_ms": 5
-    },
-    {
-      "id": "T12",
-      "cat": "suspicious",
-      "name": "VPN + pagina login",
-      "passed": true,
-      "expected": "challenge",
-      "got": "challenge",
-      "score": 0.12,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [
-        "vpn_detected"
-      ],
-      "reason": "[ctx=login boost=0.16] VPN detected",
-      "context": "login",
-      "plugin_ms": 1612.5,
-      "total_ms": 1615
-    },
-    {
-      "id": "T13",
-      "cat": "suspicious",
-      "name": "Latenza alta (380ms) / pagamento",
-      "passed": true,
-      "expected": "challenge",
-      "got": "challenge",
-      "score": 0.22,
-      "verdict": "LEGITIMATE",
-      "confidence": "high",
-      "indicators": [
-        "high_latency_380ms"
-      ],
-      "reason": "High latency detected on page load",
-      "context": "payment",
-      "plugin_ms": 1812.8,
-      "total_ms": 1816
-    },
-    {
-      "id": "T14",
-      "cat": "suspicious",
-      "name": "VPN + canvas vuoto + login",
-      "passed": true,
-      "expected": "challenge",
-      "got": "challenge",
-      "score": 0.27,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [
-        "empty_canvas",
-        "vpn_detected"
-      ],
-      "reason": "[ctx=login boost=0.23] Browser reale con segnali ambigui",
-      "context": "login",
-      "plugin_ms": 1832.5,
-      "total_ms": 1835
-    },
-    {
-      "id": "T15",
-      "cat": "suspicious",
-      "name": "Timezone UTC + lingua italiana (anomalia)",
-      "passed": true,
-      "expected": "challenge",
-      "got": "challenge",
-      "score": 0.1,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [
-        "timezone_anomaly"
-      ],
-      "reason": "[ctx=admin boost=0.12] Browser in uso sembra essere un browser reale, ma è stato rilevato un segnale di anomalia sulla timezone.",
-      "context": "admin",
-      "plugin_ms": 2266.9,
-      "total_ms": 2269
-    },
-    {
-      "id": "T16",
-      "cat": "suspicious",
-      "name": "Risoluzione 1024x768 + no-lingua / login",
-      "passed": true,
-      "expected": "challenge",
-      "got": "challenge",
-      "score": 0.25,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [
-        "no_languages",
-        "suspicious_resolution"
-      ],
-      "reason": "[ctx=login boost=0.14] Browser with ambiguous signals",
-      "context": "login",
-      "plugin_ms": 1661.3,
-      "total_ms": 1664
-    },
-    {
-      "id": "T17",
-      "cat": "edge",
-      "name": "Payload minimo (solo UA)",
-      "passed": true,
-      "expected": "challenge|block",
-      "got": "block",
-      "score": 0.97,
-      "verdict": "ATTACK",
-      "confidence": "high",
-      "indicators": [
-        "no_plugins_no_webgl"
-      ],
-      "reason": "Segnale critico: no_plugins_no_webgl",
-      "context": "login",
-      "plugin_ms": 2.1,
-      "total_ms": 5
-    },
-    {
-      "id": "T18",
-      "cat": "edge",
-      "name": "User-Agent con caratteri unicode",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "default",
-      "plugin_ms": 1452.7,
-      "total_ms": 1454
-    },
-    {
-      "id": "T19",
-      "cat": "edge",
-      "name": "Static asset (soglie rilassate)",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "static",
-      "plugin_ms": 1340.9,
-      "total_ms": 1343
-    },
-    {
-      "id": "T20",
-      "cat": "edge",
-      "name": "Path sconosciuto = default context",
-      "passed": true,
-      "expected": "allow",
-      "got": "allow",
-      "score": 0.0,
-      "verdict": "LEGITIMATE",
-      "confidence": "low",
-      "indicators": [],
-      "reason": "",
-      "context": "default",
-      "plugin_ms": 1335.2,
-      "total_ms": 1337
-    }
-  ],
+  "cases": [],
   "system": [
     {
       "id": "S01",
@@ -368,11 +15,11 @@
       "extra": {
         "status": "ok",
         "version": "6.2.0",
-        "backend": "ollama",
-        "model": "ollama/llama3.1",
+        "backend": "stub",
+        "model": "stub/deterministic",
         "sessions": 0,
         "blocked_ips": 0,
-        "store": "redis",
+        "store": "memory",
         "geoip": "MaxMind DB non configurati (MAXMIND_CITY_DB / MAXMIND_ASN_DB)",
         "ws_clients": 0,
         "webhook": {
@@ -385,14 +32,14 @@
       "cat": "system",
       "name": "Session store persiste richieste multi-step",
       "passed": true,
-      "detail": "backend=redis req_count=4 atteso>=4"
+      "detail": "backend=memory req_count=4 atteso>=4"
     },
     {
       "id": "S03",
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.249 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.222 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -420,7 +67,7 @@
       "cat": "system",
       "name": "Cache LLM velocizza richieste successive",
       "passed": true,
-      "detail": "primo=1.1ms secondo=1.2ms"
+      "detail": "primo=0.1ms secondo=0.1ms"
     },
     {
       "id": "S08",
@@ -437,14 +84,14 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=2ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=49ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",
       "cat": "system",
       "name": "Prompt v7 compatto (<=650 char, direttive preservate)",
       "passed": true,
-      "detail": "chars=609 (max 650)  missing=none"
+      "detail": "chars=636 (max 650)  missing=none"
     },
     {
       "id": "S11",
@@ -459,6 +106,20 @@
       "name": "Training LoRA CLI parseable senza dipendenze ML",
       "passed": true,
       "detail": "exit=0  missing_flags=none"
+    },
+    {
+      "id": "S13",
+      "cat": "system",
+      "name": "Label BitM allineati extractor↔policy.CRITICAL_BLOCK",
+      "passed": true,
+      "detail": "detected=9/9  missing_detect=none  missing_policy=none"
+    },
+    {
+      "id": "S14",
+      "cat": "system",
+      "name": "Endpoint /collector.js (integrazione one-liner)",
+      "passed": true,
+      "detail": "status=200  ct=application/javascript  checks={'status_200': True, 'mime_js': True, 'body_has_api': True, 'window_bitm': True}"
     }
   ]
 }

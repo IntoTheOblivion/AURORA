@@ -1,5 +1,5 @@
 """
-BitM Detection Plugin — Test Suite v7.2
+BitM Detection Plugin — Test Suite v7.3
 
 Copertura:
   • legit      → browser reali in vari contesti
@@ -9,6 +9,7 @@ Copertura:
   • system     → feature v6.x (session store, GeoIP, rate-limit, admin, webhook)
                  + v7.0 (system prompt compatto, pipeline training)
                  + v7.2 (coerenza label BitM/BitM+ tra extractor e policy)
+                 + v7.3 (collector.js endpoint per integrazione one-liner)
 
 Esecuzione:
   python tests/run_tests.py
@@ -927,6 +928,33 @@ async def sys_train_lora_cli(client: httpx.AsyncClient, base: str) -> dict:
     }
 
 
+async def sys_collector_js_endpoint(client: httpx.AsyncClient, base: str) -> dict:
+    """S14 — GET /collector.js serve il collector standalone con MIME JS corretto."""
+    try:
+        r = await client.get(f"{base}/collector.js")
+        ct = r.headers.get("content-type", "")
+        body = r.text
+        checks = {
+            "status_200":   r.status_code == 200,
+            "mime_js":      "javascript" in ct.lower(),
+            "body_has_api": "/api/bitm/collect" in body or "data-endpoint" in body,
+            "window_bitm":  "window.BitM" in body,
+        }
+        passed = all(checks.values())
+        return {
+            "id": "S14", "cat": "system",
+            "name": "Endpoint /collector.js (integrazione one-liner)",
+            "passed": passed,
+            "detail": f"status={r.status_code}  ct={ct}  checks={checks}",
+        }
+    except Exception as e:
+        return {
+            "id": "S14", "cat": "system",
+            "name": "Endpoint /collector.js (integrazione one-liner)",
+            "passed": False, "detail": f"errore: {e}",
+        }
+
+
 async def sys_bitm_labels_aligned(client: httpx.AsyncClient, base: str) -> dict:
     """S13 — i label BitM/BitM+ emessi da extractor sono presenti in policy.CRITICAL_BLOCK."""
     try:
@@ -990,6 +1018,8 @@ SYSTEM_CHECKS = [
     sys_train_lora_cli,
     # ── v7.2 (BitM/BitM+) ──
     sys_bitm_labels_aligned,
+    # ── v7.3 (distribuzione one-shot) ──
+    sys_collector_js_endpoint,
 ]
 
 
@@ -1007,7 +1037,7 @@ def print_report(cases: list, systems: list) -> dict:
         by_cat.setdefault(r["cat"], []).append(r)
 
     print(f"\n{B}{'='*72}{X}")
-    print(f"{B}  BitM Detection Plugin v7.2 — Test Suite{X}")
+    print(f"{B}  BitM Detection Plugin v7.3 — Test Suite{X}")
     print(f"{'='*72}")
 
     for cat in ("legit", "attack", "suspicious", "edge"):
@@ -1034,7 +1064,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     if systems:
         sys_pass = sum(1 for r in systems if r["passed"])
-        print(f"\n{B}SYSTEM v6.2 + v7.0 + v7.2 ({sys_pass}/{len(systems)}){X}")
+        print(f"\n{B}SYSTEM v6.2 + v7.0 + v7.2 + v7.3 ({sys_pass}/{len(systems)}){X}")
         for r in systems:
             icon = f"{G}✓{X}" if r["passed"] else f"{R}✗{X}"
             print(f"  {icon} [{r['id']}] {r['name']}")
@@ -1078,7 +1108,7 @@ def _select(cases: list, flt: str | None, only: str | None) -> list:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="BitM Test Suite v7.2")
+    parser = argparse.ArgumentParser(description="BitM Test Suite v7.3")
     parser.add_argument("--filter", help="Categorie separate da virgola (legit,attack,...)")
     parser.add_argument("--only",   help="ID specifici separati da virgola (T01,T05,...)")
     parser.add_argument("--parallel", type=int, default=1,
