@@ -5,7 +5,13 @@
       "Bash(docker --version)",
       "Bash(redis-server --version)",
       "Bash(netstat -ano)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(curl -s --max-time 3 http://localhost:8000/health)",
+      "Bash(echo \"---exitcode: $?\")",
+      "Bash(python run.py)",
+      "Bash(disown sleep *)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(node *)"
     ]
   }
 }
