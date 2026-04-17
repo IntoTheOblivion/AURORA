@@ -1,10 +1,525 @@
 {
-  "timestamp": "2026-04-17T11:38:23.132585",
+  "timestamp": "2026-04-18T00:57:02.662343",
   "version": "7.3",
-  "passed": 15,
-  "total": 15,
+  "passed": 44,
+  "total": 44,
   "accuracy": 1.0,
-  "cases": [],
+  "cases": [
+    {
+      "id": "T01",
+      "cat": "legit",
+      "name": "Chrome / Windows / Italia",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "default",
+      "plugin_ms": 0.2,
+      "total_ms": 49
+    },
+    {
+      "id": "T02",
+      "cat": "legit",
+      "name": "Firefox / macOS / Italia",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "admin",
+      "plugin_ms": 0.2,
+      "total_ms": 47
+    },
+    {
+      "id": "T03",
+      "cat": "legit",
+      "name": "Safari / iPhone / Italia (zero plugin = normale)",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 62
+    },
+    {
+      "id": "T04",
+      "cat": "legit",
+      "name": "Edge / Windows / Italia",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 42
+    },
+    {
+      "id": "T05",
+      "cat": "legit",
+      "name": "Chrome Android / timing naturale",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 48
+    },
+    {
+      "id": "T06",
+      "cat": "attack",
+      "name": "HeadlessChrome / Evilginx",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "headless_ua",
+        "webdriver_flag",
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 43
+    },
+    {
+      "id": "T07",
+      "cat": "attack",
+      "name": "Playwright / webdriver=true / SwiftShader",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "webdriver_flag"
+      ],
+      "reason": "Segnale critico: webdriver_flag, webdriver_true",
+      "context": "login",
+      "plugin_ms": 0.3,
+      "total_ms": 48
+    },
+    {
+      "id": "T08",
+      "cat": "attack",
+      "name": "Selenium / no plugin + no WebGL / desktop",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: no_plugins_no_webgl",
+      "context": "payment",
+      "plugin_ms": 0.1,
+      "total_ms": 44
+    },
+    {
+      "id": "T09",
+      "cat": "attack",
+      "name": "Tor exit node / checkout",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "tor_exit_node"
+      ],
+      "reason": "Segnale critico: tor_exit_node",
+      "context": "payment",
+      "plugin_ms": 0.1,
+      "total_ms": 49
+    },
+    {
+      "id": "T10",
+      "cat": "attack",
+      "name": "Puppeteer UA marker",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "headless_ua",
+        "webdriver_flag",
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
+      "context": "admin",
+      "plugin_ms": 0.1,
+      "total_ms": 44
+    },
+    {
+      "id": "T11",
+      "cat": "attack",
+      "name": "Latenza estrema (>600ms) = scraping",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "extreme_latency"
+      ],
+      "reason": "Segnale critico: extreme_latency",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 50
+    },
+    {
+      "id": "T12",
+      "cat": "suspicious",
+      "name": "VPN + pagina login",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.12,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "vpn_detected"
+      ],
+      "reason": "[ctx=login boost=0.16] stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 46
+    },
+    {
+      "id": "T13",
+      "cat": "suspicious",
+      "name": "Latenza alta (380ms) / pagamento",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.22,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "high_latency_380ms"
+      ],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "payment",
+      "plugin_ms": 0.1,
+      "total_ms": 50
+    },
+    {
+      "id": "T14",
+      "cat": "suspicious",
+      "name": "VPN + canvas vuoto + login",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.27,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "empty_canvas",
+        "vpn_detected",
+        "empty_canvas"
+      ],
+      "reason": "[ctx=login boost=0.23] stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 45
+    },
+    {
+      "id": "T15",
+      "cat": "suspicious",
+      "name": "Timezone UTC + lingua italiana (anomalia)",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.1,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "timezone_anomaly"
+      ],
+      "reason": "[ctx=admin boost=0.12] stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "admin",
+      "plugin_ms": 0.1,
+      "total_ms": 51
+    },
+    {
+      "id": "T16",
+      "cat": "suspicious",
+      "name": "Risoluzione 1024x768 + no-lingua / login",
+      "passed": true,
+      "expected": "challenge",
+      "got": "challenge",
+      "score": 0.25,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "no_languages",
+        "suspicious_resolution",
+        "no_languages",
+        "suspicious_resolution"
+      ],
+      "reason": "[ctx=login boost=0.14] stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 46
+    },
+    {
+      "id": "T17",
+      "cat": "edge",
+      "name": "Payload minimo (solo UA)",
+      "passed": true,
+      "expected": "challenge|block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "no_plugins_no_webgl"
+      ],
+      "reason": "Segnale critico: no_plugins_no_webgl",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 51
+    },
+    {
+      "id": "T18",
+      "cat": "edge",
+      "name": "User-Agent con caratteri unicode",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 45
+    },
+    {
+      "id": "T19",
+      "cat": "edge",
+      "name": "Static asset (soglie rilassate)",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "static",
+      "plugin_ms": 0.1,
+      "total_ms": 50
+    },
+    {
+      "id": "T20",
+      "cat": "edge",
+      "name": "Path sconosciuto = default context",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "default",
+      "plugin_ms": 0.1,
+      "total_ms": 45
+    },
+    {
+      "id": "T21",
+      "cat": "attack",
+      "name": "BitM RFB — noVNC client marker nel title",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "novnc_client_marker"
+      ],
+      "reason": "Segnale critico: novnc_client_marker",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 51
+    },
+    {
+      "id": "T22",
+      "cat": "attack",
+      "name": "BitM RDP — Apache Guacamole client",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "guacamole_client_marker",
+        "bitm_backend_port"
+      ],
+      "reason": "Segnale critico: bitm_backend_port, guacamole_client_marker",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 46
+    },
+    {
+      "id": "T23",
+      "cat": "attack",
+      "name": "BitM+ xssPayload — loadFromAttacker() nell'URL",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "xss_reflected_param"
+      ],
+      "reason": "Segnale critico: xss_reflected_param",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 42
+    },
+    {
+      "id": "T24",
+      "cat": "attack",
+      "name": "BitM+ evilGet — navigator.credentials.get non nativo",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "webauthn_api_override"
+      ],
+      "reason": "Segnale critico: webauthn_api_override",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 46
+    },
+    {
+      "id": "T25",
+      "cat": "attack",
+      "name": "BitM+ backend port (MalSrv :3081) visibile al client",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "bitm_backend_port"
+      ],
+      "reason": "Segnale critico: bitm_backend_port",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 49
+    },
+    {
+      "id": "T26",
+      "cat": "attack",
+      "name": "BitM UA leak — noVNC nell'User-Agent",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "bitm_framework_ua"
+      ],
+      "reason": "Segnale critico: bitm_framework_ua",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 44
+    },
+    {
+      "id": "T27",
+      "cat": "attack",
+      "name": "BitM+ WebSocket transport verso tunnel ngrok",
+      "passed": true,
+      "expected": "block",
+      "got": "block",
+      "score": 0.97,
+      "verdict": "ATTACK",
+      "confidence": "high",
+      "indicators": [
+        "bitm_websocket_transport"
+      ],
+      "reason": "Segnale critico: bitm_websocket_transport",
+      "context": "payment",
+      "plugin_ms": 0.1,
+      "total_ms": 48
+    },
+    {
+      "id": "T28",
+      "cat": "suspicious",
+      "name": "ngrok tunnel + login (sospetto, ambiente dev legittimo possibile)",
+      "passed": true,
+      "expected": "challenge|block",
+      "got": "challenge",
+      "score": 0.25,
+      "verdict": "LEGITIMATE",
+      "confidence": "high",
+      "indicators": [
+        "tunnel_host"
+      ],
+      "reason": "[ctx=login boost=0.18] stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 45
+    },
+    {
+      "id": "T29",
+      "cat": "edge",
+      "name": "WebAuthn API nativa confermata → nessun boost",
+      "passed": true,
+      "expected": "allow",
+      "got": "allow",
+      "score": 0.0,
+      "verdict": "LEGITIMATE",
+      "confidence": "low",
+      "indicators": [],
+      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "context": "login",
+      "plugin_ms": 0.1,
+      "total_ms": 50
+    }
+  ],
   "system": [
     {
       "id": "S01",
@@ -39,7 +554,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.201 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.121 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -84,7 +599,7 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=49ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=48ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",

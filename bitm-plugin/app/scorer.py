@@ -433,12 +433,11 @@ async def _score_stub(features: dict) -> dict:
     confirmed = list(features.get("confirmed_signals") or [])
     headless_sig = list(features.get("headless_signals") or [])
 
-    # Se ci sono segnali confermati ma pre_score è basso, alza a soglia sospetta
+    # Usa direttamente pre_risk_score: è già la somma pesata deterministica
+    # dei segnali. Alzare artificialmente a 0.5/0.65 sommava al boost contestuale
+    # in policy.decide e spingeva casi suspicious (T12/T14/T15/T16) sopra la
+    # soglia block. Il floor vero vive già in policy (pre_risk_score >= score).
     score = pre
-    if confirmed and score < 0.5:
-        score = 0.5
-    if headless_sig and score < 0.65:
-        score = 0.65
 
     if score >= 0.65:
         verdict = "ATTACK"

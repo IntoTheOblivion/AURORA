@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "BitM Shield",
+  "version": "0.1.0",
+  "description": "Rileva localmente attacchi Browser-in-the-Middle (noVNC, Guacamole, evilGet, tunnel HTTPS). Nessun dato lascia il browser.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/page-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/detection.js", "src/content-script.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_title": "BitM Shield",
+    "default_popup": "src/popup.html"
+  }
+}

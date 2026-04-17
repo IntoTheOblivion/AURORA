@@ -2,10 +2,11 @@
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 7.3.0** (runtime)
-> Distribuzione one-shot via Docker/GHCR: `docker compose up` per un'istanza zero-config, oppure `<script src="…/collector.js">` per integrazione one-liner su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
+> **Versione corrente: 7.3.0** (runtime) · **Estensione browser v0.1.0** (BitM Shield, MV3)
+> Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`bitm-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
+> - **v0.1** (estensione) — `bitm-extension/` MV3: rilevamento locale dei 7 segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab. Zero rete, zero storage remoto
 > - **v7.3** — Dockerfile + docker-compose + workflow GHCR + collector.js standalone + default `LLM_BACKEND=stub` + S14
 > - **v7.2** — Rilevamento stack BitM / BitM+ (noVNC/Websockify/Guacamole + ngrok/MalSrv/evilGet), T21–T29, S13
 > - **v7.1** — Suite E2E Playwright + workflow GitHub Actions + backend `stub` deterministico
@@ -37,6 +38,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Test](#-test)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
 - [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
+- [Estensione browser BitM Shield (v0.1)](#-estensione-browser-bitm-shield-v01)
 - [Changelog](#-changelog)
 
 ---
@@ -86,6 +88,16 @@ docker run --rm -p 8000:8000 ghcr.io/<owner>/bitm-llm:latest
 ```
 
 Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
+
+### D. Protezione lato utente con l'estensione browser
+
+Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), carica l'estensione `bitm-extension/`:
+
+1. `chrome://extensions` (oppure `edge://extensions`)
+2. Attiva "Modalità sviluppatore" in alto a destra
+3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `bitm-extension/`
+
+L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser BitM Shield](#-estensione-browser-bitm-shield-v01) per il dettaglio.
 
 ---
 
@@ -216,30 +228,94 @@ geoip2>=4.7.0
 
 ## 🛠 Installazione & Setup
 
-### 1. Ambiente virtuale
+Il progetto si compone di **tre artefatti installabili indipendentemente**:
+
+| Componente | Cartella | Serve quando… |
+|-----------|----------|---------------|
+| **Backend server** (FastAPI) | `bitm-plugin/` | proteggi un sito di tua proprietà (server-side detection) |
+| **Collector JavaScript** | `bitm-plugin/app/static/collector.js` | integri il backend su un sito esistente via `<script>` |
+| **Estensione browser** (MV3) | `bitm-extension/` | vuoi protezione lato utente su qualsiasi sito |
+
+Le due modalità di installazione del backend — **Docker** e **Python locale** — sono alternative. Scegli Docker se vuoi la via più rapida e zero-config; scegli Python locale se stai sviluppando/modificando il codice.
+
+---
+
+### Path A — Backend via Docker (consigliato)
+
+**Prerequisiti**: Docker Desktop ≥ 24 o Docker Engine + docker-compose plugin.
+
+```bash
+git clone <repo-url> && cd Bitm_LLM
+docker compose up --build
+```
+
+Questo singolo comando:
+1. Builda l'immagine `bitm-llm:local` a partire da `bitm-plugin/Dockerfile` (Python 3.13-slim)
+2. Avvia il container `bitm-api` sulla porta `8000`
+3. Usa `LLM_BACKEND=stub` di default → nessuna API key richiesta
+4. Store sessioni: in-memory (nessun Redis)
+
+Profili opzionali:
+
+```bash
+# Stack completo con Redis (sessioni persistenti multi-worker)
+docker compose --profile redis up
+
+# LLM locale via Ollama (richiede ~4 GB per llama3.1)
+docker compose --profile ollama up
+docker exec -it bitm-ollama ollama pull llama3.1
+
+# Combinato Redis + Ollama
+docker compose --profile redis --profile ollama up
+```
+
+Variabili d'ambiente sovrascrivibili:
+
+```bash
+LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
+```
+
+Pulizia:
+
+```bash
+docker compose down --volumes    # stop + rimozione container + volumi
+```
+
+---
+
+### Path B — Backend via Python locale (per sviluppo)
+
+**Prerequisiti**: Python ≥ 3.13, pip ≥ 24. Facoltativo: Redis, Ollama, MaxMind GeoLite2.
+
+#### B.1 — Ambiente virtuale e dipendenze
 
 ```bash
 cd bitm-plugin
 python -m venv .venv
 
-# Windows
+# Windows PowerShell / cmd
 .venv\Scripts\activate
+# Windows Git Bash / WSL
+source .venv/Scripts/activate
 # Linux / macOS
 source .venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-### 2. Redis (consigliato)
+#### B.2 — Redis (opzionale)
+
+Serve solo se vuoi **sessioni persistenti tra riavvii** o **multi-worker**. Senza Redis il backend usa un dict in-memory (singolo processo).
 
 ```bash
-# Docker — opzione più rapida
+# Opzione più rapida: container standalone
 docker run -d --name bitm-redis -p 6379:6379 redis:7-alpine
+
+# Verifica connessione
+redis-cli ping     # → PONG
 ```
 
-Senza Redis il sistema parte comunque con fallback in-memory (singolo processo, nessuna persistenza tra riavvii).
-
-### 3. File `.env`
+#### B.3 — File `.env`
 
 ```bash
 cp .env.example .env
@@ -333,22 +409,145 @@ WEBHOOK_CONFIG_FILE=/path/to/webhook.json
 }
 ```
 
+#### B.4 — Verifica dell'ambiente
+
+```bash
+python diagnose.py
+```
+
+Lo script prova a connettersi al backend LLM configurato e stampa un report (modello selezionato, latenza, eventuale errore). Usa `diagnose.py` prima di avviare il server se sospetti un problema di configurazione.
+
+---
+
+### Path C — Estensione browser (BitM Shield)
+
+L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcuna chiamata di rete verso il server BitM.
+
+**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-bitm-shield-v01)).
+
+#### C.1 — Installazione in modalità sviluppatore
+
+1. Apri `chrome://extensions` (Edge: `edge://extensions`)
+2. Attiva il toggle **Modalità sviluppatore** in alto a destra
+3. Clicca **Carica estensione non pacchettizzata**
+4. Seleziona la cartella `bitm-extension/` (quella che contiene `manifest.json`)
+
+L'estensione appare nella lista con il nome **BitM Shield** e la versione **0.1.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a BitM Shield) per vedere il badge per-tab.
+
+#### C.2 — Verifica funzionamento
+
+Apri una demo pubblica noVNC (es. [https://novnc.com/noVNC/vnc_lite.html](https://novnc.com/noVNC/vnc_lite.html)):
+- Il badge dell'icona diventa **rosso** con testo "X"
+- Compare un banner rosso in cima alla pagina
+- Clicca l'icona → il popup mostra `novnc_client_marker` (+ eventualmente `bitm_websocket_transport` se la demo apre WS)
+
+Apri un sito normale (es. `https://example.com`):
+- Badge verde vuoto, popup mostra "OK — score 0.000, Nessun segnale"
+
+#### C.3 — Disinstallazione
+
+`chrome://extensions` → clicca **Rimuovi** sulla scheda BitM Shield. L'estensione non scrive nulla su disco remoto; rimuoverla cancella tutto il suo stato.
+
 ---
 
 ## 🚀 Avvio
 
+Tre modalità di avvio, corrispondenti ai tre Path di installazione. Ciascuna è indipendente.
+
+### Avvio A — Backend via Docker
+
 ```bash
-# Dalla cartella bitm-plugin/
+# Dalla root del repo
+docker compose up               # foreground, log a terminale
+docker compose up -d            # background (detached)
+
+# Status
+docker compose ps               # container attivi
+docker logs -f bitm-api         # log live
+
+# Stop
+docker compose stop             # stop preservando i container
+docker compose down             # stop + rimozione container
+```
+
+Il servizio è raggiungibile su `http://localhost:8000`. Endpoint utili per verificare:
+
+```bash
+curl http://localhost:8000/health          # stato di tutti i sottosistemi
+curl http://localhost:8000/collector.js    # deve restituire JS (non 404)
+open http://localhost:8000/dashboard       # dashboard real-time
+```
+
+### Avvio B — Backend locale (Python)
+
+```bash
+# Dalla cartella bitm-plugin/ con la venv attiva
 python run.py
 ```
 
-Output atteso all'avvio:
+Output atteso:
 
 ```
-[bitm] Backend LLM: ollama @ http://localhost:11434  model=llama3.1
-[redis] connesso a redis://localhost:6379/0
-[bitm] Session store: redis
-[bitm] GeoIP: MaxMind attivo (city+asn)
+[config] Backend LLM: stub/deterministic
+[bitm] Session store: memory
+[bitm] GeoIP: MaxMind DB non configurati (MAXMIND_CITY_DB / MAXMIND_ASN_DB)
+INFO:     Started server process [12345]
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+```
+
+Configurazioni comuni:
+
+```bash
+# Porta personalizzata
+PORT=9000 python run.py
+
+# Forza backend diverso da quello in .env
+LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... python run.py
+LLM_BACKEND=ollama python run.py
+
+# Diagnostica end-to-end del backend LLM
+python diagnose.py
+```
+
+Per **produzione multi-worker** (richiede Redis per stato condiviso):
+
+```bash
+REDIS_URL=redis://localhost:6379/0 \
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+> **Nota dashboard/WebSocket**: con `--workers > 1` ogni worker ha il suo broadcaster in-process. Il dashboard real-time mostrerà solo gli eventi del worker che ha servito la connessione WebSocket del browser. Per distribuire gli eventi tra worker serve promuovere `broadcaster.py` a Redis pub/sub (non incluso in v7.3).
+
+Arresto: `CTRL+C`. In modalità dev (`reload=True` in `run.py`) il server ri-carica automaticamente al salvataggio di un file `.py`.
+
+### Avvio C — Estensione browser
+
+L'estensione non ha un comando di avvio: **è attiva automaticamente** dopo l'installazione (§[C.1](#c1--installazione-in-modalità-sviluppatore)).
+
+Eventi di "avvio" visibili all'utente:
+- Apertura di una nuova tab → icona grigia (nessun verdetto ancora)
+- Caricamento di una pagina → in 1-2 secondi badge verde/arancio/rosso a seconda del verdetto
+- Apertura del popup → verdetto, score, lista segnali, origin
+
+Per ricaricare l'estensione dopo una modifica al codice: `chrome://extensions` → clicca l'icona di refresh sulla scheda BitM Shield, poi ricarica le tab aperte.
+
+### Avvio combinato: backend + collector su sito + estensione
+
+I tre componenti sono orthogonali e possono coesistere. Esempio tipico di setup completo per ricerca/test:
+
+```bash
+# Terminal 1 — backend
+cd Bitm_LLM && docker compose up
+
+# Terminal 2 — serve una pagina demo con collector
+cd bitm-plugin/app/static
+python -m http.server 8080
+
+# Browser
+# 1. installa bitm-extension/ (§C.1)
+# 2. apri http://localhost:8080/test_page.html
+# 3. controlla il dashboard backend (http://localhost:8000/dashboard)
+#    e il popup dell'estensione: dovrebbero concordare sul verdetto
 ```
 
 L'API è disponibile su `http://0.0.0.0:8000` (porta configurabile con la variabile `PORT` nel `.env`).
@@ -951,7 +1150,106 @@ Il collector popola i campi opzionali letti da `extractor.py::_detect_bitm` usan
 
 ---
 
+## 🛡 Estensione browser BitM Shield (v0.1)
+
+Mentre il backend server-side (`bitm-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `bitm-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere.
+
+### Architettura
+
+```
+bitm-extension/
+├── manifest.json              # MV3
+└── src/
+    ├── page-hook.js           # MAIN world: hook WebSocket + credentials.get
+    ├── detection.js           # porting JS delle regole di extractor._detect_bitm
+    ├── content-script.js      # ISOLATED world: detect, banner, blocco submit
+    ├── background.js          # service worker: stato per-tab + badge toolbar
+    ├── popup.html / .css / .js
+```
+
+Due script iniettati per-tab:
+
+1. **`page-hook.js`** gira nel MAIN world (stesso contesto di esecuzione dello script della pagina) — necessario per patchare `window.WebSocket` e ispezionare `navigator.credentials.get`. Non ha accesso alle API `chrome.*`.
+2. **`content-script.js`** gira nell'ISOLATED world (sandbox dell'estensione) — riceve via `window.postMessage` gli snapshot prodotti dal page-hook, applica `detection.js` e comunica i verdetti al service worker.
+
+### Logica di detection
+
+La funzione `BitMDetection.detect(input)` in `detection.js` è un porting fedele di `extractor._detect_bitm` + `_pre_score`: stesse regex (`TUNNEL_HOST_RE`, `NOVNC_TITLE_RE`, `GUACAMOLE_TITLE_RE`, `XSS_PAYLOAD_RE`, `BITM_PORT_RE`), stessi marker UA (`novnc/websockify/guacamole/tigervnc`), stessi pesi (`_AMPLIFIER_WEIGHTS`), stesso insieme critico (`CRITICAL_BLOCK`).
+
+Le soglie per il verdetto sono fisse (non contestuali come nel server, v. §[Limitazioni](#limitazioni-note-v010)):
+
+| Output | Condizione |
+|--------|-----------|
+| `block` | almeno un segnale in `CRITICAL` **oppure** score ≥ 0.65 |
+| `challenge` | score ≥ 0.28 |
+| `allow` | altrimenti |
+
+### Comportamento runtime
+
+1. **Content-script a `document_start`** installa il listener per i postMessage dal page-hook e registra il capture-phase `submit` listener
+2. **Page-hook a `document_start`** patcha `window.WebSocket`, emette un primo snapshot su `DOMContentLoaded` e un secondo su `load`
+3. **Re-probe** dopo 2 s (i WS spesso si aprono post-load) via `postMessage({source:"bitm-content", cmd:"probe"})`
+4. Ogni snapshot arriva al content-script → `BitMDetection.detect(...)` → `chrome.runtime.sendMessage({type:"bitm-verdict", ...})` al background
+5. **Background** mantiene il verdetto peggiore per-tab (mai declassa), aggiorna il badge toolbar (vuoto/`!`/`X`, verde/arancio/rosso) e lo rende disponibile al popup
+6. Se il verdetto corrente è `block`, l'evento `submit` su un `<form>` che contiene un `<input type=password>` viene **preventDefault** + banner shadow-DOM in cima alla pagina
+
+### Privacy
+
+- **Nessun `fetch()` o `XMLHttpRequest`** verso il backend o qualsiasi server esterno
+- **Nessun `chrome.storage`** scritto in v0.1 (lo stato vive solo in memoria, per-tab)
+- **Nessuna telemetria**: l'estensione non ha permessi `webRequest` né `cookies`
+- Permessi dichiarati in `manifest.json`: `storage` (riservato per v0.2+), `activeTab`, `host_permissions: <all_urls>` (solo per iniettare i content script, non per leggere network)
+
+### Testing manuale
+
+| Scenario | URL | Atteso |
+|----------|-----|--------|
+| Demo noVNC pubblica | `https://novnc.com/noVNC/vnc_lite.html` | badge **X** rosso, popup mostra `novnc_client_marker` |
+| Sito normale | `https://example.com` | badge vuoto verde, popup "OK, score 0.000" |
+| Tunnel ngrok su login (simulato) | pagina con `<form>` password su `*.ngrok-free.app` | verdetto `challenge`, submit NON bloccato |
+| Form submit su pagina bloccata | `/login` con verdetto precedente `block` | `preventDefault` + banner "Invio bloccato" |
+
+Smoke-test rapido della logica via Node (dalla cartella `bitm-extension/`):
+
+```bash
+node -e "
+var code = require('fs').readFileSync('src/detection.js', 'utf-8');
+var self = {};
+eval(code);
+console.log(JSON.stringify(self.BitMDetection.detect({
+  title: 'noVNC - Remote',
+  pageUrl: 'https://x.ngrok-free.app/vnc.html',
+  credentialsGetNative: false,
+  wsEndpoints: ['wss://x.ngrok-free.app/websockify'],
+  userAgent: 'Mozilla/5.0 noVNC/1.4.0',
+  iframeCount: 0
+}), null, 2));
+"
+# → verdict: block, score: 1, 6 segnali
+```
+
+### Limitazioni note (v0.1.0)
+
+- **Nessun boost contestuale**: il server applica +0.16 VPN, +0.18 tunnel_host, ecc. sui segnali deboli quando il `context` è `login`/`payment`/`admin`. L'estensione no. Conseguenza: un attacco con solo `tunnel_host` su una login page ha score 0.25 (< 0.28) → allow. Roadmap v0.2: guardare `<input type=password>` nel DOM per inferire il contesto login e attivare il boost
+- **Firefox non supportato**: MV3 su Firefox non ha ancora il `content_scripts.world: "MAIN"` stabile. Serve un port che usi `<script>` injection via `web_accessible_resources`
+- **Nessuna icona**: `manifest.json` non specifica `action.default_icon` → Chrome mostra un placeholder. Da aggiungere per la distribuzione store
+- **Nessuna whitelist utente**: ogni page-load riparte vergine. Roadmap v0.2: `chrome.storage.local` con "origin approvato dall'utente" per silenziare il banner su siti conosciuti
+- **Nessuna difesa contro clone statico**: se un attaccante clona staticamente la login e non fa proxy, l'estensione vede un sito apparentemente normale. La difesa contro phishing statico resta responsabilità di DMARC, takedown e password manager che validano l'origin
+
+---
+
 ## 📦 Changelog
+
+### v0.1.0 (estensione) — BitM Shield browser extension (MV3)
+- **`bitm-extension/`** — Estensione Chromium MV3 per protezione lato utente su qualsiasi sito
+- **Porting JS delle regole** (`src/detection.js`) di `extractor._detect_bitm` + `_pre_score`: 9 segnali, stesse regex e stessi pesi del backend, insieme `CRITICAL` allineato con `policy.CRITICAL_BLOCK`
+- **Page-hook in MAIN world** (`src/page-hook.js`): WebSocket patcher per tracciare endpoint aperti + ispezione `navigator.credentials.get` per detection `evilGet`
+- **Content-script in ISOLATED world** (`src/content-script.js`): detect + banner shadow-DOM quando verdetto = `block` + capture-phase listener su `submit` che blocca i form con password sui siti flaggati
+- **Service worker** (`src/background.js`): stato per-tab con `tabs.onUpdated`, badge toolbar verde/arancio/rosso, risposta al popup via `runtime.sendMessage`
+- **Popup** (`src/popup.*`): verdetto, score, lista segnali, origin della tab corrente
+- **Privacy-first**: nessuna chiamata di rete, nessun storage remoto, nessuna telemetria. Solo `storage` + `activeTab` come permessi
+
+
 
 ### v7.3.0 — Distribuzione one-shot (Docker + GHCR + collector.js)
 - **Docker** (`bitm-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
