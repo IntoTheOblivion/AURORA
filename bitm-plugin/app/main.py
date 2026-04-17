@@ -28,7 +28,7 @@ from app.geoip import resolve as geoip_resolve, summary as geoip_summary
 from app.broadcaster import get_broadcaster
 from app.notifier import notify_block, webhook_status
 
-app = FastAPI(title="BitM Detection Plugin", version="6.2.0")
+app = FastAPI(title="BitM Detection Plugin", version="7.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -110,7 +110,7 @@ async def collector():
 async def health():
     return {
         "status":      "ok",
-        "version":     "6.2.0",
+        "version":     "7.3.0",
         "backend":     LLM_BACKEND,
         "model":       get_selected_model(),
         "sessions":    await _store.session_count(),

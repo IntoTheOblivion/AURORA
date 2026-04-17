@@ -2,16 +2,15 @@
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 6.2.0** (runtime)
-> Webhook push notifications (Slack / Teams / SIEM) per eventi BLOCK — notifiche HTTP asincrone fire-and-forget con retry esponenziale.
+> **Versione corrente: 7.3.0** (runtime)
+> Distribuzione one-shot via Docker/GHCR: `docker compose up` per un'istanza zero-config, oppure `<script src="…/collector.js">` per integrazione one-liner su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
-> **In preparazione: 7.0** — infrastruttura di fine-tuning LoRA per LLaMA 3.1 (`bitm-plugin/training/`) e system prompt compatto (~40% più corto) per ridurre la latenza di inferenza.
->
-> **In preparazione: 7.1** — suite E2E Playwright (`bitm-plugin/tests/e2e_playwright/`) che simula attacchi evasivi reali (UA rotation, input sub-human, stealth patches, canvas/WebGL spoof, …) + workflow GitHub Actions (`.github/workflows/e2e-playwright.yml`) con soglia detection ≥ 90%. Backend `stub` deterministico in `scorer.py` per CI senza LLM reale.
->
-> **In preparazione: 7.2** — rilevamento specifico degli stack BitM e BitM+ documentati nella letteratura scientifica. Firme per **noVNC + WebSockify + TigerVNC** (RFB), **Apache Guacamole + FreeRDP** (RDP), e l'intero stack **BitM+** (ngrok tunnel + Node/Express MalSrv + Puppeteer + reflected XSS + `evilGet()` override della WebAuthn API). Riferimenti: Tommasi 2021 (IJIS), Tzschoppe & Löhr 2023 (EuroSec), Catalano 2025 (J. Computer Virology).
->
-> **In preparazione: 7.3** — distribuzione one-shot: `Dockerfile` + `docker-compose.yml` in root, immagine pubblicata su **GHCR**, collector JS standalone servito da `GET /collector.js` per integrazione `<script>`-only. Default `LLM_BACKEND=stub` → zero configurazione necessaria per demo e ricerca.
+> Storico rilasci stabili:
+> - **v7.3** — Dockerfile + docker-compose + workflow GHCR + collector.js standalone + default `LLM_BACKEND=stub` + S14
+> - **v7.2** — Rilevamento stack BitM / BitM+ (noVNC/Websockify/Guacamole + ngrok/MalSrv/evilGet), T21–T29, S13
+> - **v7.1** — Suite E2E Playwright + workflow GitHub Actions + backend `stub` deterministico
+> - **v7.0** — Infrastruttura fine-tuning LoRA per LLaMA 3.1 + system prompt compatto (~40% più corto)
+> - **v6.2** — Webhook push notifications (Slack / Teams / SIEM) per eventi BLOCK, retry esponenziale
 
 ---
 
@@ -449,7 +448,7 @@ Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed
 ```json
 {
   "status":      "ok",
-  "version":     "6.2.0",
+  "version":     "7.3.0",
   "backend":     "ollama",
   "model":       "ollama/llama3.1",
   "sessions":    4,
