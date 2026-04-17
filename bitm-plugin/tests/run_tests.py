@@ -959,6 +959,77 @@ async def sys_collector_js_endpoint(client: httpx.AsyncClient, base: str) -> dic
         }
 
 
+async def sys_collector_payload_detects_bitm(client: httpx.AsyncClient, base: str) -> dict:
+    """S15 — payload shape del collector.js triggera i segnali BitM/BitM+ in extractor."""
+    # Questa shape replica esattamente quella emessa da collector.js (v7.3):
+    # `pageUrl`/`title`/`wsEndpoints`/`iframeCount`/`credentialsGetNative`.
+    # Se i nomi campo driftano rispetto a extractor._detect_bitm, l'intera
+    # pipeline BitM v7.2 diventa silenziosamente inerte per l'integrazione
+    # one-liner. Questo check blocca quella regressione in CI.
+    try:
+        # Reset per evitare interferenze con altri system check
+        try:
+            await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+        except Exception:
+            pass
+
+        payload = {
+            "sessionId": f"s15-{uuid.uuid4().hex[:8]}",
+            "page":      "/login",
+            "userAgent": "Mozilla/5.0 noVNC/1.4 Websockify",
+            "plugins":   ["PDF Viewer"],
+            "webgl":     "ANGLE (Intel)",
+            "canvas":    "s15canvas",
+            "webdriver": False,
+            "languages": ["en-US"],
+            "screenRes": "1920x1080",
+            "colorDepth": 24,
+            "timezone":  "Europe/Rome",
+            "platform":  "Linux x86_64",
+            "timing":    15,
+            # Shape collector.js v7.3 — nomi campo estrattore-native
+            "pageUrl":              "https://victim.ngrok-free.app:6080/vnc.html?xssParam=%7BloadFromAttacker(x)%7D",
+            "referrer":             "https://victim.ngrok-free.app/",
+            "title":                "Login Page - noVNC",
+            "wsEndpoints":          ["wss://victim.ngrok-free.app/websockify"],
+            "iframeCount":          5,
+            "credentialsGetNative": False,
+        }
+        r = await client.post(f"{base}/api/bitm/collect", json=payload, timeout=20)
+        body = r.json()
+        indicators = set(body.get("indicators") or [])
+        # I segnali forti attesi dal detector quando il collector invia
+        # fedelmente i dati di una pagina BitM
+        expected = {
+            "novnc_client_marker", "bitm_framework_ua", "bitm_backend_port",
+            "xss_reflected_param", "webauthn_api_override",
+            "bitm_websocket_transport", "tunnel_host",
+        }
+        # Il fast-path può troncare gli indicator a ≤ N nomi, quindi accettiamo
+        # copertura parziale purché almeno i "forti" (critical) siano presenti.
+        critical = {"novnc_client_marker", "bitm_framework_ua",
+                    "bitm_backend_port", "xss_reflected_param",
+                    "webauthn_api_override", "bitm_websocket_transport"}
+        hit_critical = indicators & critical
+        missing_critical = critical - indicators
+        passed = (body.get("action") == "block"
+                  and len(hit_critical) >= 3)
+        return {
+            "id": "S15", "cat": "system",
+            "name": "Shape collector.js triggera segnali BitM/BitM+ (contratto)",
+            "passed": passed,
+            "detail": (f"action={body.get('action')}  score={body.get('score')}  "
+                       f"hit={sorted(hit_critical) or 'none'}  "
+                       f"missing_critical={sorted(missing_critical) or 'none'}"),
+        }
+    except Exception as e:
+        return {
+            "id": "S15", "cat": "system",
+            "name": "Shape collector.js triggera segnali BitM/BitM+ (contratto)",
+            "passed": False, "detail": f"errore: {e}",
+        }
+
+
 async def sys_bitm_labels_aligned(client: httpx.AsyncClient, base: str) -> dict:
     """S13 — i label BitM/BitM+ emessi da extractor sono presenti in policy.CRITICAL_BLOCK."""
     try:
@@ -1024,6 +1095,7 @@ SYSTEM_CHECKS = [
     sys_bitm_labels_aligned,
     # ── v7.3 (distribuzione one-shot) ──
     sys_collector_js_endpoint,
+    sys_collector_payload_detects_bitm,
 ]
 
 
@@ -1083,7 +1155,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "version":   "7.2",
+        "version":   "7.3",
         "passed":    passed,
         "total":     total,
         "accuracy":  round(passed / total, 3) if total else 0,

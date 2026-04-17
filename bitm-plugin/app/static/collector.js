@@ -1,5 +1,5 @@
 /*
- * BitM Detection Plugin — Collector
+ * BitM Detection Plugin — Collector v7.3
  *
  * Integrazione one-liner:
  *   <script src="https://<host>/collector.js"
@@ -10,6 +10,11 @@
  *   BitM.classify()   → Promise<Result>   invio manuale
  *   BitM.fingerprint() → Promise<Fingerprint>
  *   BitM.onResult(fn) → registra listener sul risultato
+ *
+ * NOTA: i nomi dei campi nel payload (pageUrl, title, wsEndpoints, iframeCount,
+ * credentialsGetNative) sono quelli letti direttamente da extractor._detect_bitm.
+ * Non modificare senza aggiornare il lato Python, altrimenti i segnali BitM/BitM+
+ * silenziano (vedi S15 sys_collector_payload_detects_bitm per la copertura).
  */
 (function () {
   "use strict";
@@ -24,6 +29,28 @@
   var PAGE     = (script && script.getAttribute("data-page"))     || null;
   var AUTO     = (script && script.getAttribute("data-auto"))     !== "false";
   var listeners = [];
+
+  // Hook globale su WebSocket per tracciare endpoint effettivamente aperti
+  // (serve all'extractor per fire di `bitm_websocket_transport` su websockify/tunnel).
+  var _wsEndpoints = [];
+  try {
+    var _NativeWS = window.WebSocket;
+    if (_NativeWS && !_NativeWS.__bitmPatched) {
+      var _PatchedWS = function (url, protocols) {
+        try { _wsEndpoints.push(String(url)); } catch (_) { /* ignore */ }
+        return protocols !== undefined
+          ? new _NativeWS(url, protocols)
+          : new _NativeWS(url);
+      };
+      _PatchedWS.prototype = _NativeWS.prototype;
+      _PatchedWS.__bitmPatched = true;
+      // Preserva costanti statiche (CONNECTING, OPEN, ...)
+      for (var k in _NativeWS) {
+        try { _PatchedWS[k] = _NativeWS[k]; } catch (_) { /* ignore */ }
+      }
+      window.WebSocket = _PatchedWS;
+    }
+  } catch (_) { /* ignore hook errors */ }
 
   function sessionId() {
     try {
@@ -62,30 +89,21 @@
     } catch (e) { return ""; }
   }
 
-  function detectWebAuthnOverride() {
+  function credentialsGetNative() {
     try {
-      if (!navigator.credentials || !navigator.credentials.get) return false;
+      if (!navigator.credentials || !navigator.credentials.get) return true;
       var src = Function.prototype.toString.call(navigator.credentials.get);
-      // Le implementazioni native riportano "[native code]"
-      return src.indexOf("[native code]") === -1;
-    } catch (e) { return false; }
-  }
-
-  function detectIframeOverlay() {
-    try {
-      return window.top !== window.self;
+      return src.indexOf("[native code]") !== -1;
     } catch (e) {
-      // Cross-origin access negato → quasi certamente in iframe
+      // Se non riusciamo a ispezionare, non asseriamo override
       return true;
     }
   }
 
-  function websocketTransport() {
+  function iframeCount() {
     try {
-      return location.protocol === "https:"
-        ? "wss://" + location.host
-        : "ws://"  + location.host;
-    } catch (e) { return ""; }
+      return document.getElementsByTagName("iframe").length;
+    } catch (e) { return 0; }
   }
 
   async function fingerprint() {
@@ -107,12 +125,13 @@
       timezone:   (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "",
       platform:   navigator.platform,
       timing:     timing,
-      // Marker aggiuntivi per rilevamento BitM/BitM+
-      documentTitle:       document.title || "",
-      locationSearch:      location.search || "",
-      webauthnOverridden:  detectWebAuthnOverride(),
-      iframeOverlay:       detectIframeOverlay(),
-      wsTransport:         websocketTransport(),
+      // Marker per rilevamento BitM/BitM+ — nomi allineati a extractor._detect_bitm
+      pageUrl:                location.href || "",
+      referrer:               document.referrer || "",
+      title:                  document.title || "",
+      wsEndpoints:            _wsEndpoints.slice(),
+      iframeCount:            iframeCount(),
+      credentialsGetNative:   credentialsGetNative(),
     };
     return fp;
   }
@@ -146,7 +165,7 @@
     fingerprint: fingerprint,
     onResult:    onResult,
     endpoint:    ENDPOINT,
-    version:     "7.2",
+    version:     "7.3",
   };
 
   if (AUTO) {

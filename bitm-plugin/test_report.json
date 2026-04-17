@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-04-17T11:18:29.739663",
-  "version": "7.2",
-  "passed": 14,
-  "total": 14,
+  "timestamp": "2026-04-17T11:38:23.132585",
+  "version": "7.3",
+  "passed": 15,
+  "total": 15,
   "accuracy": 1.0,
   "cases": [],
   "system": [
@@ -39,7 +39,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.8 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.201 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -67,7 +67,7 @@
       "cat": "system",
       "name": "Cache LLM velocizza richieste successive",
       "passed": true,
-      "detail": "primo=0.2ms secondo=0.1ms"
+      "detail": "primo=0.1ms secondo=0.1ms"
     },
     {
       "id": "S08",
@@ -84,7 +84,7 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=53ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=49ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",
@@ -120,6 +120,13 @@
       "name": "Endpoint /collector.js (integrazione one-liner)",
       "passed": true,
       "detail": "status=200  ct=application/javascript  checks={'status_200': True, 'mime_js': True, 'body_has_api': True, 'window_bitm': True}"
+    },
+    {
+      "id": "S15",
+      "cat": "system",
+      "name": "Shape collector.js triggera segnali BitM/BitM+ (contratto)",
+      "passed": true,
+      "detail": "action=block  score=0.97  hit=['bitm_backend_port', 'bitm_framework_ua', 'bitm_websocket_transport', 'novnc_client_marker', 'webauthn_api_override', 'xss_reflected_param']  missing_critical=none"
     }
   ]
 }
