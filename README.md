@@ -947,35 +947,35 @@ BitM.onResult(fn)     // listener chiamato a ogni classify()
 BitM.endpoint         // → URL configurato via data-endpoint
 ```
 
-Il collector aggiunge campi opzionali per il rilevamento BitM/BitM+ che `extractor.py::_detect_bitm` legge: `documentTitle`, `locationSearch` (→ `pageUrl`), `webauthnOverridden` (→ `credentialsGetNative=false`), `iframeOverlay`, `wsTransport`.
+Il collector popola i campi opzionali letti da `extractor.py::_detect_bitm` usando gli stessi nomi (nessun layer di remap): `pageUrl = location.href`, `referrer = document.referrer`, `title = document.title`, `wsEndpoints = [...]` (tracciato via hook su `new WebSocket`), `iframeCount = document.getElementsByTagName('iframe').length`, `credentialsGetNative = navigator.credentials.get.toString().includes('[native code]')`. La coerenza del contratto è verificata da **S15** (`sys_collector_payload_detects_bitm`).
 
 ---
 
 ## 📦 Changelog
 
-### v7.3 — work in progress (distribuzione one-shot)
+### v7.3.0 — Distribuzione one-shot (Docker + GHCR + collector.js)
 - **Docker** (`bitm-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
 - **Collector standalone** (`bitm-plugin/app/static/collector.js` + `GET /collector.js` in `app/main.py`): integrazione one-liner via `<script src=".../collector.js" data-endpoint="..." data-auto="true">`. Espone `window.BitM` con `classify()`, `fingerprint()`, `onResult(fn)`
 - **Default `LLM_BACKEND=stub`** (`app/config.py`): eliminata la necessità di una API key per il primo avvio. Lo scorer deterministico `_score_stub` (già presente in v7.1) produce verdetti basati su `pre_risk_score` + segnali BitM/BitM+, sufficiente per demo e ricerca
 - **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/<owner>/bitm-llm` su push/tag. Permette `docker run ghcr.io/<owner>/bitm-llm:latest` da terminale pulito
-- **Test suite**: 41 → 42 casi. Aggiunto **S14 `sys_collector_js_endpoint`** (verifica endpoint `/collector.js`: 200 + MIME JS + stringhe chiave nel body)
+- **Test suite**: 41 → 43 casi. Aggiunti **S14 `sys_collector_js_endpoint`** (endpoint `/collector.js`: 200 + MIME JS + stringhe chiave nel body) e **S15 `sys_collector_payload_detects_bitm`** (POST di un payload collector-shaped su una pagina BitM noVNC simulata → verifica che i segnali forti BitM/BitM+ scattino, blocca il drift silenzioso del contratto collector↔extractor)
 
 
 
-### v7.2 — work in progress (rilevamento BitM/BitM+ specifico)
+### v7.2.0 — Rilevamento BitM / BitM+ specifico
 - **Firme dedicate agli stack BitM documentati** (`app/extractor.py::_detect_bitm`): 9 nuovi segnali (`novnc_client_marker`, `guacamole_client_marker`, `bitm_framework_ua`, `bitm_backend_port`, `xss_reflected_param`, `webauthn_api_override`, `bitm_websocket_transport`, `tunnel_host`, `iframe_overlay`) estratti da campi opzionali del payload (`pageUrl`, `referrer`, `title`, `wsEndpoints`, `credentialsGetNative`, `iframeCount`)
 - **Allineamento tri-file** di `CRITICAL_BLOCK` (policy) / fast-path (main) / detector (extractor) con nuovo system check **S13** a garanzia
 - **SYSTEM_PROMPT** aggiornato per segnalare gli stack BitM+ all'LLM senza sforare il limite v7.0 (≤ 650 char; attuale 636)
 - **Test suite**: 32 → 41 casi. Aggiunti T21–T29 (noVNC/Guacamole/xssPayload/evilGet/MalSrv port/UA leak/WS tunnel/ngrok-dev/WebAuthn nativa) + S13 (label alignment)
 - **Riferimenti**: Tommasi 2021 (IJIS), Tzschoppe & Löhr 2023 (EuroSec), Catalano 2025 (J. Computer Virology)
 
-### v7.1 — work in progress (E2E evasive + CI)
+### v7.1.0 — E2E Playwright + CI
 - **E2E Playwright** (`bitm-plugin/tests/e2e_playwright/run_e2e.py`): 7 tecniche di evasione reali (UA rotation, timing sub-human, no-static, stealth patches, canvas noise, WebGL spoof, Tor) eseguite su Chromium headless con init-script e route-blocking
 - **Metrica di accettazione**: `detection_rate = (challenge+block)/totale`, exit ≠ 0 se < `--min-detection` (default 0.90). Report JSON persistito su disco
 - **CI GitHub Actions** (`.github/workflows/e2e-playwright.yml`): pipeline completa (setup Python → `playwright install chromium` → `run.py` in background → `run_e2e.py` → upload artefatto) su push/PR per `bitm-plugin/**` + `workflow_dispatch` con soglia override
 - **Backend `stub` scorer** (`app/scorer.py` + `app/config.py`): aggiunto terzo backend deterministico (oltre `anthropic`/`ollama`) per CI e dev senza credenziali. Derivato esclusivamente da `pre_risk_score` + segnali dell'extractor
 
-### v7.0 — work in progress (infrastruttura training)
+### v7.0.0 — Infrastruttura fine-tuning LoRA
 - **System prompt compatto** (`app/scorer.py`): riscrittura del `SYSTEM_PROMPT` in versione v7 — 609 caratteri vs 1080 della v6 (~43% in meno), direttive essenziali preservate, rationale documentato inline
 - **Pipeline dataset** (`training/build_dataset.py`): conversione `bitm_events.jsonl → ChatML` con filtri su cache/errori tecnici, dedup per `(ua, verdict, pre_score)`, split train/val, bilanciamento opzionale per classe
 - **Training LoRA** (`training/train_lora.py`): fine-tuning di LLaMA 3.1 con `transformers + peft + trl.SFTTrainer`, quantizzazione 4-bit NF4 opzionale, target modules LLaMA, gradient checkpointing, import lazy (`--help` funziona senza dipendenze ML installate)
