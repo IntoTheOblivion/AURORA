@@ -11,6 +11,7 @@ Novità v6.2:
   (Slack Blocks API, Microsoft Teams Adaptive Cards, SIEM JSON)
 """
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -18,9 +19,14 @@ from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconn
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import LLM_BACKEND, summary as config_summary, validate as config_validate
+from app.config import (
+    LLM_BACKEND,
+    LLM_TRAJECTORY_ANALYSIS,
+    summary as config_summary,
+    validate as config_validate,
+)
 from app.extractor import extract_features
-from app.scorer import score_session, get_selected_model
+from app.scorer import score_session, analyze_trajectory, get_selected_model
 from app.policy import decide, Action, detect_page_context
 from app.logger import log_event
 from app.redis_client import get_store
@@ -28,7 +34,7 @@ from app.geoip import resolve as geoip_resolve, summary as geoip_summary
 from app.broadcaster import get_broadcaster
 from app.notifier import notify_block, webhook_status
 
-app = FastAPI(title="BitM Detection Plugin", version="7.3.0")
+app = FastAPI(title="BitM Detection Plugin", version="7.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -109,16 +115,17 @@ async def collector():
 @app.get("/health")
 async def health():
     return {
-        "status":      "ok",
-        "version":     "7.3.0",
-        "backend":     LLM_BACKEND,
-        "model":       get_selected_model(),
-        "sessions":    await _store.session_count(),
-        "blocked_ips": await _store.blocked_count(),
-        "store":       _store.backend,
-        "geoip":       geoip_summary(),
-        "ws_clients":  _broadcaster.client_count,
-        "webhook":     webhook_status(),
+        "status":              "ok",
+        "version":             "7.4.0",
+        "backend":             LLM_BACKEND,
+        "model":               get_selected_model(),
+        "trajectory_analysis": LLM_TRAJECTORY_ANALYSIS,
+        "sessions":            await _store.session_count(),
+        "blocked_ips":         await _store.blocked_count(),
+        "store":               _store.backend,
+        "geoip":               geoip_summary(),
+        "ws_clients":          _broadcaster.client_count,
+        "webhook":             webhook_status(),
     }
 
 
@@ -169,6 +176,14 @@ async def collect(request: Request, body: dict):
     features = extract_features(body, ip, store, ip_meta=ip_meta)
     context  = detect_page_context(page)
 
+    # Session snapshot passato al layer trajectory (aggiornato sopra con pages/timings)
+    session_snapshot = {
+        "session_id": sid,
+        "pages":      list(store.get("pages") or []),
+        "timings":    list(store.get("timings") or []),
+        "first_seen": store.get("first_seen", t0),
+    }
+
     # Regole deterministiche (nessuna chiamata LLM)
     fast_sigs = _fast_rules(features)
     if fast_sigs:
@@ -179,11 +194,23 @@ async def collect(request: Request, body: dict):
             "indicators":  fast_sigs,
             "explanation": f"Blocco deterministico: {', '.join(fast_sigs[:3])}",
         }
+        # Fast path → nessuna analisi trajectory: già blocco critico.
+        traj = {"trajectory_score": 0.0, "pattern": "bypassed_fast_rules",
+                "explanation_user": "", "explanation_admin": ""}
+    elif LLM_TRAJECTORY_ANALYSIS:
+        # Scoring + trajectory in parallelo per evitare di sommare latenze.
+        result, traj = await asyncio.gather(
+            score_session(features),
+            analyze_trajectory(session_snapshot, features),
+        )
     else:
         result = await score_session(features)
+        traj   = {"trajectory_score": 0.0, "pattern": "disabled",
+                  "explanation_user": "", "explanation_admin": ""}
 
-    # Decisione finale (policy)
-    action, reason = decide(result, context, features)
+    # Decisione finale (policy) — trajectory_score come boost capped separato.
+    t_score = float(traj.get("trajectory_score") or 0.0)
+    action, reason = decide(result, context, features, trajectory_score=t_score)
 
     if action == Action.BLOCK:
         store["block_count"] = store.get("block_count", 0) + 1
@@ -195,7 +222,8 @@ async def collect(request: Request, body: dict):
     await _store.set_session(sid, store)
 
     elapsed = round((time.time() - t0) * 1000, 1)
-    entry   = log_event(ip, sid, features, result, action, elapsed, context)
+    entry   = log_event(ip, sid, features, result, action, elapsed, context,
+                        trajectory=traj)
     await _broadcaster.publish(entry)
     notify_block(entry)  # fire-and-forget; no-op se webhook non configurato
 
@@ -208,6 +236,7 @@ async def collect(request: Request, body: dict):
         context,
         elapsed,
         confidence=result.get("confidence", "low"),
+        trajectory=traj,
     )
 
 
@@ -252,8 +281,9 @@ def _fast_rules(features: dict) -> list[str]:
 
 def _resp(action: str, score: float, verdict: str, indicators: list,
           reason: str, context: str, latency: float,
-          confidence: str = "high", status: int = 200) -> JSONResponse:
-    return JSONResponse({
+          confidence: str = "high", status: int = 200,
+          trajectory: dict | None = None) -> JSONResponse:
+    payload = {
         "action":     action,
         "score":      round(score, 3),
         "verdict":    verdict,
@@ -262,7 +292,23 @@ def _resp(action: str, score: float, verdict: str, indicators: list,
         "reason":     reason,
         "context":    context,
         "latency_ms": latency,
-    }, status_code=status)
+    }
+    if trajectory:
+        pattern = trajectory.get("pattern") or ""
+        # Non-payload patterns: disabled / bypassed / insufficient_history → omessi
+        # per restare backward-compatible con client v7.3.
+        if pattern and pattern not in ("disabled", "bypassed_fast_rules",
+                                       "insufficient_history"):
+            payload["trajectory_pattern"] = pattern
+            payload["trajectory_score"]   = round(
+                float(trajectory.get("trajectory_score") or 0.0), 3)
+        eu = trajectory.get("explanation_user") or ""
+        ea = trajectory.get("explanation_admin") or ""
+        if eu:
+            payload["explanation_user"]  = eu
+        if ea and action != "allow":
+            payload["explanation_admin"] = ea
+    return JSONResponse(payload, status_code=status)
 
 
 # ── Admin endpoints ───────────────────────────────────────────────────────────

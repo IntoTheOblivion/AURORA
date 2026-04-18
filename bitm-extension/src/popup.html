@@ -8,29 +8,100 @@
 <body>
   <header>
     <h1>BitM Shield</h1>
-    <span id="version">v0.1.0</span>
+    <span id="version">v0.2.0</span>
+    <span id="backend-status" class="badge local" title=""></span>
   </header>
 
-  <section id="verdict-box" class="pending">
-    <div class="label">Verdetto</div>
-    <div id="verdict">—</div>
-    <div id="score">score —</div>
-  </section>
+  <nav class="tabs">
+    <button class="tab active" data-tab="status"   data-i18n="popup_tab_status">Stato</button>
+    <button class="tab"        data-tab="history"  data-i18n="popup_tab_history">Storico</button>
+    <button class="tab"        data-tab="settings" data-i18n="popup_tab_settings">Impostazioni</button>
+  </nav>
 
-  <section>
-    <div class="label">Segnali rilevati</div>
-    <ul id="signals"><li class="muted">Nessuno</li></ul>
-  </section>
+  <!-- ───── Tab: Status ─────────────────────────────────────────────────────── -->
+  <div class="panel active" id="panel-status">
+    <section id="verdict-box" class="pending">
+      <div class="label">Verdetto</div>
+      <div id="verdict">—</div>
+      <div id="score">score —</div>
+    </section>
 
-  <section>
-    <div class="label">Origine corrente</div>
-    <div id="origin" class="mono">—</div>
-  </section>
+    <section>
+      <div class="label" data-i18n="popup_signals_label">Segnali rilevati</div>
+      <ul id="signals"><li class="muted" data-i18n="popup_signals_none">Nessuno</li></ul>
+    </section>
+
+    <section id="pattern-box" hidden>
+      <div class="label" data-i18n="popup_pattern_label">Pattern</div>
+      <div id="pattern" class="mono">—</div>
+    </section>
+
+    <section id="explanation-box" hidden>
+      <div class="label" data-i18n="popup_explanation_label">Spiegazione</div>
+      <div id="explanation"></div>
+    </section>
+
+    <section>
+      <div class="label" data-i18n="popup_origin_label">Origine corrente</div>
+      <div id="origin" class="mono">—</div>
+    </section>
+  </div>
+
+  <!-- ───── Tab: History ────────────────────────────────────────────────────── -->
+  <div class="panel" id="panel-history">
+    <section>
+      <ul id="history-list" class="history">
+        <li class="muted" data-i18n="popup_history_empty">Nessun evento registrato.</li>
+      </ul>
+    </section>
+    <section>
+      <button id="history-clear" class="btn-ghost" data-i18n="popup_history_clear">Svuota storico</button>
+    </section>
+  </div>
+
+  <!-- ───── Tab: Settings ──────────────────────────────────────────────────── -->
+  <div class="panel" id="panel-settings">
+    <section>
+      <div class="label" data-i18n="settings_mode_label">Modalità</div>
+      <label class="radio">
+        <input type="radio" name="mode" value="off">
+        <span data-i18n="settings_mode_off">Off</span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="mode" value="local">
+        <span data-i18n="settings_mode_local">Locale</span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="mode" value="hybrid">
+        <span data-i18n="settings_mode_hybrid">Ibrida</span>
+      </label>
+    </section>
+
+    <section>
+      <div class="label" data-i18n="settings_backend_label">URL backend</div>
+      <input type="url" id="backend-url" placeholder="http://localhost:8000" spellcheck="false">
+      <button id="test-btn" class="btn-ghost" data-i18n="settings_test_button">Testa connessione</button>
+      <div id="test-result" class="test-result"></div>
+    </section>
+
+    <section>
+      <label class="check">
+        <input type="checkbox" id="netrules-toggle">
+        <span data-i18n="settings_netrules_label">Blocca tunnel noti a livello rete</span>
+      </label>
+    </section>
+
+    <section>
+      <button id="save-btn" class="btn-primary" data-i18n="settings_save">Salva</button>
+      <span id="save-status" class="saved"></span>
+    </section>
+  </div>
 
   <footer>
-    <p class="muted">Rilevamento 100% locale. Nessun dato inviato in rete.</p>
+    <p class="muted" id="footer-note">Rilevamento locale. Nessun dato lascia il browser.</p>
   </footer>
 
+  <script src="settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

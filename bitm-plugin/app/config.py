@@ -71,6 +71,21 @@ MAXMIND_ASN_DB:  str = os.getenv("MAXMIND_ASN_DB",  "").strip()
 # ── Cache ─────────────────────────────────────────────────────────────────────
 CACHE_TTL_S: int = int(os.getenv("CACHE_TTL", "300"))   # 5 minuti default
 
+# ── Trajectory analysis (v7.4) ────────────────────────────────────────────────
+# Secondo layer LLM che legge la sequenza di pagine/timings per riconoscere
+# pattern post-compromissione (panic password change, direct admin access...).
+# "auto" = on se il backend è un LLM reale, off con stub (no-op a costo zero).
+# "on"/"off" forzano il comportamento. Vedi scorer.analyze_trajectory.
+_TRAJECTORY_RAW: str = os.getenv("LLM_TRAJECTORY_ANALYSIS", "auto").strip().lower()
+if _TRAJECTORY_RAW in ("on", "true", "1", "yes"):
+    LLM_TRAJECTORY_ANALYSIS = True
+elif _TRAJECTORY_RAW in ("off", "false", "0", "no"):
+    LLM_TRAJECTORY_ANALYSIS = False
+else:
+    LLM_TRAJECTORY_ANALYSIS = LLM_BACKEND in ("anthropic", "ollama")
+
+TRAJECTORY_CACHE_TTL_S: int = int(os.getenv("TRAJECTORY_CACHE_TTL", "60"))
+
 
 def validate() -> list[str]:
     """Restituisce lista di errori di configurazione (vuota = OK)."""
@@ -95,7 +110,10 @@ def validate() -> list[str]:
 
 def summary() -> str:
     if LLM_BACKEND == "ollama":
-        return f"ollama @ {OLLAMA_HOST}  model={OLLAMA_MODEL}"
-    if LLM_BACKEND == "stub":
-        return "stub (deterministico, no-LLM)"
-    return f"anthropic  key={ANTHROPIC_API_KEY[:12]}..." if ANTHROPIC_API_KEY else "anthropic  (no key)"
+        core = f"ollama @ {OLLAMA_HOST}  model={OLLAMA_MODEL}"
+    elif LLM_BACKEND == "stub":
+        core = "stub (deterministico, no-LLM)"
+    else:
+        core = f"anthropic  key={ANTHROPIC_API_KEY[:12]}..." if ANTHROPIC_API_KEY else "anthropic  (no key)"
+    traj = "on" if LLM_TRAJECTORY_ANALYSIS else "off"
+    return f"{core}  trajectory={traj}"

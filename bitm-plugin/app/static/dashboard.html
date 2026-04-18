@@ -38,6 +38,25 @@
   #feed-wrap { max-height: 380px; overflow-y: auto; }
   .actions { display: flex; gap: 8px; }
   .muted { color: #888; font-size: 0.75rem; }
+  tr.has-pattern { cursor: pointer; }
+  tr.has-pattern:hover { background: #fafbff; }
+  .pat { font-family: monospace; font-size: 0.72rem; color: #6a1b9a; }
+  .pat.none { color: #bbb; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+              display: none; align-items: center; justify-content: center;
+              z-index: 1000; }
+  .modal-bg.on { display: flex; }
+  .modal { background: #fff; border-radius: 10px; padding: 1.25rem 1.5rem;
+           max-width: 640px; width: 92%; max-height: 80vh; overflow: auto;
+           box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .modal h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+  .modal .field { margin: 0.6rem 0; font-size: 0.85rem; }
+  .modal .field b { display: block; font-size: 0.7rem; color: #888;
+                    text-transform: uppercase; letter-spacing: 0.3px;
+                    margin-bottom: 3px; }
+  .modal pre { background: #f7f7fa; padding: 8px; border-radius: 6px;
+               font-size: 0.78rem; white-space: pre-wrap; word-break: break-word; }
+  .modal .close { float: right; }
 </style>
 </head>
 <body>
@@ -76,11 +95,20 @@
       <thead>
         <tr>
           <th>Timestamp</th><th>IP</th><th>Sessione</th><th>Azione</th>
-          <th>Score</th><th>Verdict</th><th>Contesto</th><th>Indicatori</th>
+          <th>Score</th><th>Verdict</th><th>Contesto</th>
+          <th>Pattern</th><th>Indicatori</th>
         </tr>
       </thead>
       <tbody id="feed"></tbody>
     </table>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal" id="modal">
+    <button class="sec close" id="modal-close">Chiudi</button>
+    <h3 id="modal-title">Dettaglio evento</h3>
+    <div id="modal-body"></div>
   </div>
 </div>
 
@@ -141,6 +169,10 @@ function renderRow(e, prepend = true) {
   const tr = document.createElement("tr");
   const ts = (e.ts || "").replace("T", " ").replace("Z", "").slice(0, 19);
   const inds = (e.indicators || []).slice(0, 4).join(", ");
+  const hasPattern = !!(e.trajectory_pattern || e.explanation_admin || e.explanation_user);
+  const patCell = e.trajectory_pattern
+    ? `<span class="pat">${escapeHtml(e.trajectory_pattern)}</span>`
+    : `<span class="pat none">—</span>`;
   tr.innerHTML = `
     <td class="ts">${ts}</td>
     <td class="mono">${escapeHtml(e.ip || "")}</td>
@@ -149,12 +181,54 @@ function renderRow(e, prepend = true) {
     <td class="mono">${(e.score ?? 0).toFixed(3)}</td>
     <td>${escapeHtml(e.verdict || "")}</td>
     <td>${escapeHtml(e.context || "")}</td>
+    <td>${patCell}</td>
     <td class="muted">${escapeHtml(inds)}</td>
   `;
+  if (hasPattern) {
+    tr.classList.add("has-pattern");
+    tr.addEventListener("click", () => openModal(e));
+  }
   if (prepend) feed.insertBefore(tr, feed.firstChild);
   else feed.appendChild(tr);
   while (feed.rows.length > MAX_ROWS) feed.deleteRow(-1);
   feedCount.textContent = events.length;
+}
+
+// ── Modal dettaglio trajectory ───────────────────────────────────────────────
+const modalBg    = document.getElementById("modal-bg");
+const modalBody  = document.getElementById("modal-body");
+document.getElementById("modal-close").onclick = () => modalBg.classList.remove("on");
+modalBg.addEventListener("click", (ev) => {
+  if (ev.target === modalBg) modalBg.classList.remove("on");
+});
+
+function openModal(e) {
+  const parts = [];
+  if (e.trajectory_pattern) {
+    parts.push(`<div class="field"><b>Pattern</b><span class="pat">` +
+               escapeHtml(e.trajectory_pattern) +
+               `</span> &nbsp; score=${(e.trajectory_score ?? 0).toFixed(3)}</div>`);
+  }
+  if (e.explanation_user) {
+    parts.push(`<div class="field"><b>Spiegazione utente</b>` +
+               `<div>${escapeHtml(e.explanation_user)}</div></div>`);
+  }
+  if (e.explanation_admin) {
+    parts.push(`<div class="field"><b>Spiegazione tecnica</b>` +
+               `<pre>${escapeHtml(e.explanation_admin)}</pre></div>`);
+  }
+  parts.push(`<div class="field"><b>Azione / Verdict</b>` +
+             `<span class="tag ${e.action}">${e.action || ""}</span> &nbsp;` +
+             `${escapeHtml(e.verdict || "")} &nbsp; ` +
+             `score=${(e.score ?? 0).toFixed(3)} &nbsp; ` +
+             `pre=${(e.pre_score ?? 0).toFixed(3)}</div>`);
+  parts.push(`<div class="field"><b>Indicatori</b>` +
+             `<div>${escapeHtml((e.indicators || []).join(", ") || "—")}</div></div>`);
+  parts.push(`<div class="field"><b>Contesto</b>${escapeHtml(e.context || "")}` +
+             ` &nbsp; IP <span class="mono">${escapeHtml(e.ip || "")}</span>` +
+             ` &nbsp; sess <span class="mono">${escapeHtml((e.session || "").slice(0, 20))}</span></div>`);
+  modalBody.innerHTML = parts.join("");
+  modalBg.classList.add("on");
 }
 
 function escapeHtml(s) {
@@ -228,8 +302,11 @@ document.getElementById("btn-clear").onclick = () => {
 document.getElementById("btn-export").onclick = () => {
   if (!events.length) { alert("Nessun evento da esportare."); return; }
   const cols = ["ts","ip","session","action","context","score","pre_score",
-                "verdict","confidence","indicators","explanation","from_cache",
-                "latency_ms","browser","os","is_mobile","headless_n","ua"];
+                "verdict","confidence","indicators","explanation",
+                "trajectory_pattern","trajectory_score",
+                "explanation_user","explanation_admin",
+                "from_cache","latency_ms","browser","os","is_mobile",
+                "headless_n","ua"];
   const esc  = v => {
     if (v === null || v === undefined) return "";
     const s = Array.isArray(v) ? v.join("|") : String(v);

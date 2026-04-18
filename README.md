@@ -2,11 +2,12 @@
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 7.3.0** (runtime) · **Estensione browser v0.1.0** (BitM Shield, MV3)
+> **Versione corrente: 7.4.0** (runtime) · **Estensione browser v0.1.0** (BitM Shield, MV3)
 > Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`bitm-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
 > - **v0.1** (estensione) — `bitm-extension/` MV3: rilevamento locale dei 7 segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab. Zero rete, zero storage remoto
+> - **v7.4** — Analisi LLM della traiettoria di sessione (pattern post-compromissione) + spiegazioni utente in italiano + banner collector + colonna Pattern dashboard
 > - **v7.3** — Dockerfile + docker-compose + workflow GHCR + collector.js standalone + default `LLM_BACKEND=stub` + S14
 > - **v7.2** — Rilevamento stack BitM / BitM+ (noVNC/Websockify/Guacamole + ngrok/MalSrv/evilGet), T21–T29, S13
 > - **v7.1** — Suite E2E Playwright + workflow GitHub Actions + backend `stub` deterministico
@@ -38,6 +39,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Test](#-test)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
 - [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
+- [Analisi LLM della traiettoria (v7.4)](#-analisi-llm-della-traiettoria-v74)
 - [Estensione browser BitM Shield (v0.1)](#-estensione-browser-bitm-shield-v01)
 - [Changelog](#-changelog)
 
@@ -1150,6 +1152,57 @@ Il collector popola i campi opzionali letti da `extractor.py::_detect_bitm` usan
 
 ---
 
+## 🧠 Analisi LLM della traiettoria (v7.4)
+
+Il layer di scoring v7.0–v7.3 giudica la **singola richiesta** — UA, canvas, plugin, timing. Il problema: un attaccante che ha già bypassato l'autenticazione (MFA phishing, session-hijacking, token furto) produce richieste fingerprint-pulite da un browser reale e passerebbe `allow` su ogni singolo hit. L'unica firma residua è la **sequenza temporale** di pagine visitate: cambio password entro 2s dal login, accesso diretto a `/admin` senza passare da `/login`, navigazione frenetica su endpoint sensibili.
+
+La v7.4 aggiunge `analyze_trajectory` (`app/scorer.py`) — un **secondo layer LLM** post-scoring, chiamato in parallelo a `score_session` via `asyncio.gather`. Input: `pages[]`, `timings[]`, `pre_risk_score`, `confirmed_signals`, `context`. Output JSON:
+
+```json
+{
+  "trajectory_score": 0.62,
+  "pattern": "panic_password_change",
+  "explanation_user": "Questa sessione ha cambiato la password subito dopo il login, un comportamento tipico di account takeover.",
+  "explanation_admin": "login→account/verify→change-password in 1.8s; pattern compatibile con post-MFA-phishing account takeover"
+}
+```
+
+Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.15`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
+
+### Abilitazione
+
+```bash
+# .env — una sola delle tre righe va decommentata
+LLM_TRAJECTORY_ANALYSIS=auto   # default: on se backend reale, off con stub
+# LLM_TRAJECTORY_ANALYSIS=on   # forza on (anche su stub, usato dai test)
+# LLM_TRAJECTORY_ANALYSIS=off  # disabilita sempre
+TRAJECTORY_CACHE_TTL=60        # cache session-keyed per evitare token-burn
+```
+
+### Invariante regressione-zero
+
+Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test T30–T32 + S16–S17 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
+
+### Costo indicativo (Anthropic Haiku)
+
+- Prompt: ~400 token input, ~80 token output per chiamata
+- < $0.002 per trajectory analysis su Claude Haiku
+- Cache 60s per sessione → ping ripetuti sulla stessa sessione non ri-spendono
+- Short-circuit se `len(pages) < 2` → zero chiamate LLM su sessioni appena create
+
+### Pattern deterministici (stub backend)
+
+Per garantire CI riproducibile senza API key, lo stub implementa 3 regole hardcoded (nessuna è speculativa — sono tratte dagli incident pattern documentati):
+
+- `panic_password_change` — login seguito da change-password entro 5s (score 0.55)
+- `direct_admin_access` — `/admin` visitato senza passare da `/login` (score 0.40)
+- `rapid_navigation` — ≥ 5 pagine in <2s totali (score 0.28)
+- `normal_flow` — nessun pattern (score 0.0, no-op)
+
+Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coniare pattern nuovi dalla sequenza; la validazione normalizza lo score nel range [0, 1] e blinda il formato JSON con `format: "json"` lato Ollama.
+
+---
+
 ## 🛡 Estensione browser BitM Shield (v0.1)
 
 Mentre il backend server-side (`bitm-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `bitm-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere.
@@ -1239,6 +1292,21 @@ console.log(JSON.stringify(self.BitMDetection.detect({
 ---
 
 ## 📦 Changelog
+
+### v7.4.0 — Trajectory Anomaly Analysis (secondo layer LLM)
+- **Secondo layer LLM post-scoring** (`app/scorer.py::analyze_trajectory`): legge la sequenza `pages[]` + `timings[]` della sessione e rileva pattern post-compromissione che il fingerprint singolo non vede. Ritorna `trajectory_score 0-1`, `pattern` in snake_case e due spiegazioni (utente in italiano ≤ 200 char, tecnica ≤ 240 char). Prompt dedicato `TRAJECTORY_SYSTEM_PROMPT` separato dal prompt di scoring
+- **Backend multi-provider** simmetrico al layer fingerprint: `_analyze_trajectory_anthropic` (retry 3x, backoff, `_parse_llm_response` riusato), `_analyze_trajectory_ollama` (format JSON enforced), `_analyze_trajectory_stub` con regole deterministiche per CI (pattern `panic_password_change`, `direct_admin_access`, `rapid_navigation`, `normal_flow`)
+- **Parallelismo zero-overhead** (`app/main.py`): `score_session` + `analyze_trajectory` girano in `asyncio.gather`, la latenza effettiva è `max(score, traj)` invece che la somma. Fast-path (`_fast_rules`) bypassa il trajectory quando c'è già BLOCK critico
+- **Policy boost capped** (`app/policy.py::decide`): nuovo parametro opzionale `trajectory_score`, cap separato `TRAJ_BOOST_CAP=0.25` indipendente dal `MAX_BOOST=0.25` esistente. Il trajectory spinge sopra soglia ma non può mai declassare né, da solo, forzare BLOCK su un fingerprint pulito (admin-block=0.60 > CAP)
+- **Spiegazioni end-to-end**:
+  - **Collector** (`app/static/collector.js`): banner Shadow-DOM in-page con testo italiano comprensibile (non più label interne tipo `headless_ua`), dismissible, colori rosso/arancio per block/challenge. Espone `window.BitM.lastExplanation`
+  - **Dashboard** (`app/static/dashboard.html`): nuova colonna "Pattern" nel feed + modal click-row con spiegazione tecnica, indicatori, score breakdown. Export CSV include i nuovi campi
+  - **JSONL log** (`app/logger.py`): nuovi campi `trajectory_score`, `trajectory_pattern`, `explanation_user`, `explanation_admin` nel log eventi
+- **Config** (`app/config.py`, `.env.example`): `LLM_TRAJECTORY_ANALYSIS=auto|on|off` (default `auto` → on se backend reale, off su stub per zero regressioni). `TRAJECTORY_CACHE_TTL=60` per cache session-keyed che evita token-burn su ping ripetuti
+- **Health echo** (`GET /health`): nuovo campo `trajectory_analysis: bool` coerente con la env var
+- **Test suite**: 44 → 49 casi. Aggiunti **T30 `trajectory_panic_password_change`** (login→change-password in <3s → pattern + challenge), **T31 `trajectory_direct_admin`** (accesso `/admin` senza `/login` → direct_admin_access), **T32 `trajectory_insufficient_history`** (una sola pagina → short-circuit senza chiamare LLM), **S16 `sys_trajectory_config_echo`** (`/health` coerente con env), **S17 `sys_trajectory_stub_determinism`** (stesso input → stesso pattern, CI deterministica)
+
+
 
 ### v0.1.0 (estensione) — BitM Shield browser extension (MV3)
 - **`bitm-extension/`** — Estensione Chromium MV3 per protezione lato utente su qualsiasi sito
