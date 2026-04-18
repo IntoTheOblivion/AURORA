@@ -2,34 +2,113 @@
  * BitM Shield — content-script.js
  *
  * Gira in ISOLATED world, a document_start. Riceve via postMessage i segnali
- * grezzi raccolti da page-hook.js (MAIN world), applica BitMDetection.detect
- * e comunica il verdetto al service worker (background.js) + blocca i submit
- * dei form con password se il verdetto corrente è "block".
+ * grezzi raccolti da page-hook.js (MAIN world), applica BitMDetection.detect,
+ * aggiorna il trajectory tracker, e:
+ *   • mode=local → invia verdict locale al service worker (come v0.1)
+ *   • mode=hybrid → invia verdict+fingerprint+trajectory al SW, attende il
+ *     verdict mergiato col backend prima di mostrare il banner.
+ *
+ * Blocca submit di form con password se il verdict è block o (challenge +
+ * pattern == panic_password_change).
  */
 (function () {
   "use strict";
 
-  var lastVerdict = null;  // ultimo risultato inviato
+  var lastVerdict = null;
   var bannerShown = false;
+  var cachedSettings = { mode: "local", backendUrl: "", sessionId: "" };
 
-  function computeAndReport(data) {
-    var result = self.BitMDetection.detect(data);
-    lastVerdict = result;
+  // Carica i settings una volta all'avvio; se cambiano (popup) li aggiorniamo
+  try {
+    if (self.BitMSettings) {
+      self.BitMSettings.get().then(function (s) { cachedSettings = s; });
+      self.BitMSettings.subscribe(function (s) { cachedSettings = s; });
+    }
+  } catch (_) { /* noop */ }
 
+  function pathOf(url) {
+    try { return new URL(url).pathname || "/"; } catch (_) { return "/"; }
+  }
+
+  async function computeAndReport(data) {
+    var local = self.BitMDetection.detect(data);
+    // Traccia la pagina corrente nel tracker trajectory (sessionStorage)
+    try {
+      if (self.BitMSession) self.BitMSession.recordVisit(pathOf(location.href));
+    } catch (_) { /* noop */ }
+
+    var traj = (self.BitMSession && self.BitMSession.snapshot()) || { pages: [], timings: [], latestPage: pathOf(location.href) };
+
+    var critical = false;
+    for (var i = 0; i < local.signals.length; i++) {
+      if (self.BitMDetection.CRITICAL[local.signals[i]]) { critical = true; break; }
+    }
+
+    if (cachedSettings.mode === "hybrid") {
+      try {
+        var merged = await sendHybridProbe({
+          verdict: local.verdict,
+          score: local.score,
+          signals: local.signals,
+          critical: critical,
+          fingerprint: data,
+          trajectory: traj,
+        });
+        if (merged && merged.verdict) {
+          lastVerdict = merged;
+          maybeShowBanner(merged);
+          return;
+        }
+      } catch (_) { /* fallback locale */ }
+    }
+
+    // Path locale (mode=off, mode=local, o hybrid senza risposta)
+    lastVerdict = {
+      verdict: local.verdict,
+      score: local.score,
+      signals: local.signals,
+      explanationUser: "",
+      pattern: "",
+      source: "local",
+    };
     try {
       chrome.runtime.sendMessage({
         type: "bitm-verdict",
         url: location.href,
         origin: location.origin,
-        verdict: result.verdict,
-        score: result.score,
-        signals: result.signals,
+        verdict: local.verdict,
+        score: local.score,
+        signals: local.signals,
       });
-    } catch (_) { /* service worker non raggiungibile: ignora */ }
+    } catch (_) { /* SW asleep */ }
+    maybeShowBanner(lastVerdict);
+  }
 
-    if (result.verdict === "block" && !bannerShown) {
-      showBanner(result);
-    }
+  function sendHybridProbe(payload) {
+    return new Promise(function (resolve, reject) {
+      try {
+        chrome.runtime.sendMessage(
+          Object.assign({ type: "bitm-hybrid-probe", url: location.href, origin: location.origin }, payload),
+          function (response) {
+            if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
+            resolve(response);
+          }
+        );
+      } catch (e) { reject(e); }
+    });
+  }
+
+  function maybeShowBanner(v) {
+    if (!v) return;
+    if (v.verdict === "allow") return;
+    if (bannerShown) return;
+    if (!self.BitMBanner) return;
+    bannerShown = self.BitMBanner.show({
+      verdict: v.verdict,
+      signals: v.signals,
+      explanationUser: v.explanationUser,
+      pattern: v.pattern,
+    });
   }
 
   // ── Listener per snapshot dal page-hook ─────────────────────────────────────
@@ -40,13 +119,13 @@
     computeAndReport(d.data);
   });
 
-  // Richiediamo una ri-probe dopo 2s (i WebSocket spesso si aprono post-load)
+  // Re-probe dopo 2s (WebSocket possono aprirsi post-load)
   setTimeout(function () {
     try { window.postMessage({ source: "bitm-content", cmd: "probe" }, "*"); }
     catch (_) { /* noop */ }
   }, 2000);
 
-  // ── Blocco submit di form con password su pagine pericolose ────────────────
+  // ── Blocco submit di form con password ─────────────────────────────────────
   function hasPasswordField(form) {
     try {
       var inputs = form.querySelectorAll("input[type=password]");
@@ -54,62 +133,30 @@
     } catch (_) { return false; }
   }
 
+  function shouldBlockSubmit(v) {
+    if (!v) return false;
+    if (v.verdict === "block") return true;
+    if (v.verdict === "challenge" && v.pattern === "panic_password_change") return true;
+    return false;
+  }
+
   document.addEventListener("submit", function (ev) {
-    if (!lastVerdict || lastVerdict.verdict !== "block") return;
+    if (!shouldBlockSubmit(lastVerdict)) return;
     var form = ev.target;
     if (!form || form.tagName !== "FORM") return;
     if (!hasPasswordField(form)) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    showBanner(lastVerdict, /*submitAttempt=*/true);
-  }, /*capture=*/true);
-
-  // ── Banner in-page (shadow DOM per isolamento dallo stile del sito) ─────────
-  function showBanner(result, submitAttempt) {
-    if (bannerShown) return;
-    bannerShown = true;
-
-    try {
-      var host = document.createElement("div");
-      host.id = "__bitm_shield_banner__";
-      host.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:2147483647;";
-      var shadow = host.attachShadow({ mode: "closed" });
-
-      var msg = submitAttempt
-        ? "Invio bloccato: questa pagina mostra segnali di attacco BitM."
-        : "Attenzione: segnali di Browser-in-the-Middle rilevati su questa pagina.";
-
-      shadow.innerHTML =
-        "<style>" +
-        ".b{font:13px/1.4 system-ui,Arial,sans-serif;background:#c0392b;color:#fff;" +
-        "padding:10px 14px;display:flex;align-items:center;gap:12px;" +
-        "box-shadow:0 2px 6px rgba(0,0,0,.25)}" +
-        ".t{flex:1}" +
-        ".t strong{display:block;font-size:14px}" +
-        ".t span{opacity:.9;font-size:12px}" +
-        ".x{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:3px;" +
-        "padding:4px 10px;cursor:pointer;font-size:12px}" +
-        ".x:hover{background:rgba(255,255,255,.28)}" +
-        "</style>" +
-        "<div class='b' role='alert'>" +
-        "<div class='t'><strong>BitM Shield</strong>" +
-        "<span>" + escapeHtml(msg) +
-        " Segnali: " + escapeHtml(result.signals.join(", ")) + "</span></div>" +
-        "<button class='x' id='close'>Chiudi</button>" +
-        "</div>";
-
-      document.documentElement.appendChild(host);
-      shadow.getElementById("close").addEventListener("click", function () {
-        try { host.remove(); } catch (_) { /* noop */ }
+    if (self.BitMBanner) {
+      self.BitMBanner.show({
+        verdict: lastVerdict.verdict,
+        signals: lastVerdict.signals,
+        explanationUser: lastVerdict.explanationUser,
+        pattern: lastVerdict.pattern,
+        submitAttempt: true,
       });
-    } catch (_) { /* fallback: niente banner se il DOM non lo permette */ }
-  }
-
-  function escapeHtml(s) {
-    return String(s || "").replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+    }
+  }, /*capture=*/true);
 
   // Il popup può chiedere lo stato corrente
   chrome.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {

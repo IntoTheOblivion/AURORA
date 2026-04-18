@@ -1,63 +1,247 @@
 /*
- * BitM Shield — popup.js
+ * BitM Shield — popup.js (v0.2.0)
  *
- * Chiede al background il verdetto della tab attiva e lo mostra.
- * Se il background non ha dati (tab nuova, chrome://...), fallback
- * a "allow" con score 0.
+ * Tab Status: verdict + spiegazione (da hybrid se disponibile) della tab attiva.
+ * Tab History: ring buffer `bitm-history` in chrome.storage.local.
+ * Tab Settings: mode {off, local, hybrid}, backend URL, test-connection, toggle
+ * net-rules; salvataggio via chrome.storage.local.
  */
 (async function () {
   "use strict";
 
+  function t(key, fallback) {
+    try { var v = chrome.i18n.getMessage(key); if (v) return v; }
+    catch (_) { /* noop */ }
+    return fallback;
+  }
+
+  // ── Applica i18n ai nodi statici ────────────────────────────────────────────
+  document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    var key = el.getAttribute("data-i18n");
+    var msg = t(key, el.textContent);
+    if (msg) el.textContent = msg;
+  });
+  var backendInput = document.getElementById("backend-url");
+  if (backendInput) backendInput.placeholder = t("settings_backend_placeholder", "http://localhost:8000");
+
+  // ── Tab switcher ────────────────────────────────────────────────────────────
+  var tabs   = document.querySelectorAll("nav.tabs .tab");
+  var panels = document.querySelectorAll(".panel");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.classList.remove("active"); });
+      panels.forEach(function (p) { p.classList.remove("active"); });
+      tab.classList.add("active");
+      var target = document.getElementById("panel-" + tab.dataset.tab);
+      if (target) target.classList.add("active");
+      if (tab.dataset.tab === "history") renderHistory();
+    });
+  });
+
+  // ── Status tab ──────────────────────────────────────────────────────────────
   var boxEl     = document.getElementById("verdict-box");
   var verdictEl = document.getElementById("verdict");
   var scoreEl   = document.getElementById("score");
   var sigsEl    = document.getElementById("signals");
   var originEl  = document.getElementById("origin");
+  var patternBox = document.getElementById("pattern-box");
+  var patternEl  = document.getElementById("pattern");
+  var explBox    = document.getElementById("explanation-box");
+  var explEl     = document.getElementById("explanation");
+  var backendStatus = document.getElementById("backend-status");
+  var footerNote = document.getElementById("footer-note");
 
   function renderSignals(signals) {
     sigsEl.innerHTML = "";
     if (!signals || signals.length === 0) {
       var li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "Nessuno";
+      li.textContent = t("popup_signals_none", "Nessuno");
       sigsEl.appendChild(li);
       return;
     }
-    for (var i = 0; i < signals.length; i++) {
-      var li2 = document.createElement("li");
-      li2.textContent = signals[i];
-      sigsEl.appendChild(li2);
-    }
+    signals.forEach(function (s) {
+      var li = document.createElement("li");
+      li.textContent = s;
+      sigsEl.appendChild(li);
+    });
   }
 
-  function render(payload, origin) {
+  function renderStatus(payload, origin) {
     var verdict = (payload && payload.verdict) || "allow";
     boxEl.className = verdict;
     verdictEl.textContent =
-      verdict === "allow" ? "OK" :
-      verdict === "challenge" ? "Sospetto" :
-      verdict === "block" ? "Bloccato" : verdict;
+      verdict === "allow"     ? t("popup_verdict_ok", "OK") :
+      verdict === "challenge" ? t("popup_verdict_challenge", "Sospetto") :
+      verdict === "block"     ? t("popup_verdict_block", "Bloccato") : verdict;
     scoreEl.textContent = "score " + ((payload && payload.score) || 0).toFixed(3);
     renderSignals(payload && payload.signals);
     originEl.textContent = origin || "—";
+
+    var pattern = payload && payload.pattern;
+    if (pattern) {
+      patternBox.hidden = false;
+      patternEl.textContent = pattern;
+    } else {
+      patternBox.hidden = true;
+    }
+
+    var expl = payload && payload.explanationUser;
+    if (expl) {
+      explBox.hidden = false;
+      explEl.textContent = expl;
+    } else {
+      explBox.hidden = true;
+    }
   }
 
-  try {
-    var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    var tab = tabs && tabs[0];
-    if (!tab) { render(null, "—"); return; }
+  function renderBackendStatus(settings, payload) {
+    if (!backendStatus) return;
+    var cls, text;
+    if (settings.mode !== "hybrid") {
+      cls = "local"; text = t("popup_backend_status_local", "solo locale");
+    } else if (payload && payload.source === "hybrid" && payload.remoteOnline) {
+      cls = "online"; text = t("popup_backend_status_online", "online");
+    } else {
+      cls = "offline"; text = t("popup_backend_status_offline", "offline");
+    }
+    backendStatus.className = "badge " + cls;
+    backendStatus.textContent = text;
+  }
 
-    var originGuess = "—";
-    try { originGuess = new URL(tab.url).origin; } catch (_) { /* noop */ }
-
-    var payload = await new Promise(function (res) {
-      chrome.runtime.sendMessage({ type: "bitm-popup-query", tabId: tab.id }, function (r) {
-        res(r);
+  async function loadStatus() {
+    try {
+      var settings = await BitMSettings.get();
+      var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      var tab = tabs && tabs[0];
+      if (!tab) { renderStatus(null, "—"); renderBackendStatus(settings, null); return; }
+      var originGuess = "—";
+      try { originGuess = new URL(tab.url).origin; } catch (_) { /* noop */ }
+      var payload = await new Promise(function (res) {
+        chrome.runtime.sendMessage({ type: "bitm-popup-query", tabId: tab.id }, function (r) {
+          res(r);
+        });
       });
-    });
-
-    render(payload, payload ? payload.origin : originGuess);
-  } catch (e) {
-    render(null, "—");
+      renderStatus(payload, payload ? payload.origin : originGuess);
+      renderBackendStatus(settings, payload);
+      if (footerNote) {
+        footerNote.textContent = settings.mode === "hybrid"
+          ? t("footer_hybrid", "Modalità ibrida: le richieste vengono inoltrate al backend configurato.")
+          : t("footer_local", "Rilevamento locale. Nessun dato lascia il browser.");
+      }
+    } catch (e) {
+      renderStatus(null, "—");
+    }
   }
+  loadStatus();
+
+  // ── History tab ─────────────────────────────────────────────────────────────
+  var historyList = document.getElementById("history-list");
+  var historyClear = document.getElementById("history-clear");
+
+  async function renderHistory() {
+    var items = await chrome.storage.local.get(["bitm-history"]);
+    var list = Array.isArray(items["bitm-history"]) ? items["bitm-history"] : [];
+    historyList.innerHTML = "";
+    if (list.length === 0) {
+      var li = document.createElement("li");
+      li.className = "muted";
+      li.textContent = t("popup_history_empty", "Nessun evento registrato.");
+      historyList.appendChild(li);
+      return;
+    }
+    list.forEach(function (ev) {
+      var li = document.createElement("li");
+      var when = new Date(ev.at).toLocaleString();
+      var origin = ev.origin || (function () { try { return new URL(ev.url).origin; } catch (_) { return "—"; } })();
+      li.innerHTML =
+        "<span class='row-verdict " + ev.verdict + "'>" +
+        (ev.verdict === "block"
+          ? t("popup_verdict_block", "Bloccato")
+          : t("popup_verdict_challenge", "Sospetto")) +
+        "</span>" +
+        "<strong></strong>" +
+        (ev.pattern ? " <span class='mono'>" + "</span>" : "") +
+        "<div class='row-meta mono'></div>" +
+        "<div>" + (ev.explanationUser ? "" : "") + "</div>";
+      li.querySelector("strong").textContent = origin;
+      var metaDiv = li.querySelector(".row-meta");
+      metaDiv.textContent = when + "  ·  " + (ev.signals || []).join(", ");
+      if (ev.pattern) {
+        var pSpan = li.querySelector("span.mono");
+        if (pSpan) pSpan.textContent = "[" + ev.pattern + "]";
+      }
+      if (ev.explanationUser) {
+        li.querySelectorAll("div")[1].textContent = ev.explanationUser;
+      }
+      historyList.appendChild(li);
+    });
+  }
+
+  if (historyClear) {
+    historyClear.addEventListener("click", async function () {
+      await chrome.storage.local.set({ "bitm-history": [] });
+      renderHistory();
+    });
+  }
+
+  // ── Settings tab ────────────────────────────────────────────────────────────
+  var modeInputs   = document.querySelectorAll("input[name='mode']");
+  var backendUrlEl = document.getElementById("backend-url");
+  var testBtn      = document.getElementById("test-btn");
+  var testResult   = document.getElementById("test-result");
+  var netrulesEl   = document.getElementById("netrules-toggle");
+  var saveBtn      = document.getElementById("save-btn");
+  var saveStatus   = document.getElementById("save-status");
+
+  async function loadSettings() {
+    var s = await BitMSettings.get();
+    modeInputs.forEach(function (r) { r.checked = (r.value === s.mode); });
+    backendUrlEl.value = s.backendUrl || "";
+    netrulesEl.checked = !!s.blockNetRulesEnabled;
+  }
+  await loadSettings();
+
+  testBtn.addEventListener("click", function () {
+    testResult.textContent = "…";
+    testResult.className = "test-result";
+    chrome.runtime.sendMessage(
+      { type: "bitm-popup-test-connection", backendUrl: backendUrlEl.value },
+      function (r) {
+        if (r && r.ok) {
+          testResult.className = "test-result ok";
+          testResult.textContent = t("settings_test_ok", "Connesso") +
+            " — v" + (r.version || "?") + " · backend=" + (r.backend || "?") +
+            (r.trajectory ? " · trajectory:on" : "");
+        } else {
+          testResult.className = "test-result fail";
+          testResult.textContent = t("settings_test_fail", "Non raggiungibile") +
+            (r && r.status ? " (HTTP " + r.status + ")" : "");
+        }
+      }
+    );
+  });
+
+  saveBtn.addEventListener("click", async function () {
+    var mode = "local";
+    modeInputs.forEach(function (r) { if (r.checked) mode = r.value; });
+    var url = String(backendUrlEl.value || "").trim();
+    // Normalizza URL: rimuove trailing slash
+    url = url.replace(/\/+$/, "");
+    var netrules = !!netrulesEl.checked;
+
+    await BitMSettings.set({ mode: mode, backendUrl: url, blockNetRulesEnabled: netrules });
+    // Attiva/disattiva declarativeNetRequest via SW (SW ha chrome.declarativeNetRequest)
+    chrome.runtime.sendMessage(
+      { type: "bitm-popup-toggle-netrules", enabled: netrules },
+      function () { /* risposta ignorata: UI conferma comunque */ }
+    );
+    saveStatus.textContent = t("settings_saved", "Salvato");
+    setTimeout(function () { saveStatus.textContent = ""; }, 1500);
+    // Se siamo in hybrid e non abbiamo URL, avviso utente
+    if (mode === "hybrid" && !url) {
+      testResult.className = "test-result fail";
+      testResult.textContent = t("settings_test_fail", "Non raggiungibile") + " — URL mancante";
+    }
+  });
 })();

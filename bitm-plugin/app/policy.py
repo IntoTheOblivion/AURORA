@@ -74,6 +74,13 @@ _AMPLIFIER_WEIGHTS: dict[str, float] = {
 # → impedisce che combinazioni di segnali deboli superino la soglia BLOCK
 MAX_BOOST = 0.25
 
+# Boost separato del layer trajectory (v7.4). Cappato indipendentemente
+# da MAX_BOOST così un `trajectory_score` alto può spingere challenge→block
+# senza però permettere alla sola traiettoria di arrivare al block su uno
+# score fingerprint pulito: admin-block=0.60 > CAP=0.25, quindi la soglia
+# richiede ancora che il fingerprint o i segnali abbiano contribuito.
+TRAJ_BOOST_CAP = 0.25
+
 
 def detect_page_context(path: str) -> str:
     """Deduce il contesto di sicurezza dalla URL."""
@@ -93,7 +100,8 @@ def detect_page_context(path: str) -> str:
 
 
 def decide(score_result: dict, context: str = "default",
-           features: dict | None = None) -> tuple[Action, str]:
+           features: dict | None = None,
+           trajectory_score: float = 0.0) -> tuple[Action, str]:
     """
     Determina l'azione finale.
 
@@ -101,7 +109,8 @@ def decide(score_result: dict, context: str = "default",
     1. Segnali critici (BLOCK immediato, indipendente dallo score)
     2. pre_risk_score come floor dello score LLM
     3. Boost contestuale (cappato a MAX_BOOST) su set deduplicato
-    4. Soglie contestuali
+    4. Trajectory boost (cappato a TRAJ_BOOST_CAP) — non è un floor
+    5. Soglie contestuali
     """
     # ATTENZIONE: usare `or` con score è sbagliato perché 0.0 è falsy in Python
     # → `0.0 or 0.5` restituisce 0.5. Usare sempre controllo esplicito su None.
@@ -142,7 +151,18 @@ def decide(score_result: dict, context: str = "default",
         if boost > 0:
             explanation = f"[ctx={context} boost={boost:.2f}] {explanation}"
 
-    # 3. Soglie contestuali
+    # 3. Trajectory boost — applicato dopo il boost contestuale, cap separato.
+    # Serve a spingere sopra soglia quando la sequenza di pagine rivela un
+    # pattern post-compromissione; non può mai declassare. Trajectory_score è
+    # già un rischio 0-1, quindi contribuisce direttamente ma capato a 0.25
+    # per non potere, da solo, flippare un fingerprint pulito in block.
+    t_raw = max(0.0, min(1.0, float(trajectory_score or 0.0)))
+    if t_raw > 0:
+        traj_boost = min(TRAJ_BOOST_CAP, t_raw)
+        amplified  = min(1.0, amplified + traj_boost)
+        explanation = f"[traj={t_raw:.2f} +{traj_boost:.2f}] {explanation}"
+
+    # 4. Soglie contestuali
     thresh_challenge, thresh_block = THRESHOLDS.get(context, THRESHOLDS["default"])
 
     if amplified >= thresh_block:

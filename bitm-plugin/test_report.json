@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-04-18T00:57:02.662343",
+  "timestamp": "2026-04-18T23:38:09.759005",
   "version": "7.3",
-  "passed": 44,
-  "total": 44,
+  "passed": 49,
+  "total": 49,
   "accuracy": 1.0,
   "cases": [
     {
@@ -19,7 +19,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "default",
       "plugin_ms": 0.2,
-      "total_ms": 49
+      "total_ms": 3
     },
     {
       "id": "T02",
@@ -34,8 +34,8 @@
       "indicators": [],
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "admin",
-      "plugin_ms": 0.2,
-      "total_ms": 47
+      "plugin_ms": 0.1,
+      "total_ms": 2
     },
     {
       "id": "T03",
@@ -51,7 +51,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "default",
       "plugin_ms": 0.1,
-      "total_ms": 62
+      "total_ms": 2
     },
     {
       "id": "T04",
@@ -67,7 +67,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "default",
       "plugin_ms": 0.1,
-      "total_ms": 42
+      "total_ms": 2
     },
     {
       "id": "T05",
@@ -83,7 +83,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "default",
       "plugin_ms": 0.1,
-      "total_ms": 48
+      "total_ms": 2
     },
     {
       "id": "T06",
@@ -103,7 +103,7 @@
       "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 43
+      "total_ms": 2
     },
     {
       "id": "T07",
@@ -120,8 +120,8 @@
       ],
       "reason": "Segnale critico: webdriver_flag, webdriver_true",
       "context": "login",
-      "plugin_ms": 0.3,
-      "total_ms": 48
+      "plugin_ms": 0.1,
+      "total_ms": 2
     },
     {
       "id": "T08",
@@ -139,7 +139,7 @@
       "reason": "Segnale critico: no_plugins_no_webgl",
       "context": "payment",
       "plugin_ms": 0.1,
-      "total_ms": 44
+      "total_ms": 2
     },
     {
       "id": "T09",
@@ -157,7 +157,7 @@
       "reason": "Segnale critico: tor_exit_node",
       "context": "payment",
       "plugin_ms": 0.1,
-      "total_ms": 49
+      "total_ms": 2
     },
     {
       "id": "T10",
@@ -177,7 +177,7 @@
       "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
       "context": "admin",
       "plugin_ms": 0.1,
-      "total_ms": 44
+      "total_ms": 2
     },
     {
       "id": "T11",
@@ -195,7 +195,7 @@
       "reason": "Segnale critico: extreme_latency",
       "context": "default",
       "plugin_ms": 0.1,
-      "total_ms": 50
+      "total_ms": 2
     },
     {
       "id": "T12",
@@ -213,7 +213,7 @@
       "reason": "[ctx=login boost=0.16] stub scorer deterministico (pre_risk_score + segnali)",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 46
+      "total_ms": 2
     },
     {
       "id": "T13",
@@ -231,7 +231,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "payment",
       "plugin_ms": 0.1,
-      "total_ms": 50
+      "total_ms": 2
     },
     {
       "id": "T14",
@@ -251,7 +251,7 @@
       "reason": "[ctx=login boost=0.23] stub scorer deterministico (pre_risk_score + segnali)",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 45
+      "total_ms": 2
     },
     {
       "id": "T15",
@@ -269,7 +269,7 @@
       "reason": "[ctx=admin boost=0.12] stub scorer deterministico (pre_risk_score + segnali)",
       "context": "admin",
       "plugin_ms": 0.1,
-      "total_ms": 51
+      "total_ms": 2
     },
     {
       "id": "T16",
@@ -289,8 +289,8 @@
       ],
       "reason": "[ctx=login boost=0.14] stub scorer deterministico (pre_risk_score + segnali)",
       "context": "login",
-      "plugin_ms": 0.1,
-      "total_ms": 46
+      "plugin_ms": 0.2,
+      "total_ms": 2
     },
     {
       "id": "T17",
@@ -307,8 +307,8 @@
       ],
       "reason": "Segnale critico: no_plugins_no_webgl",
       "context": "login",
-      "plugin_ms": 0.1,
-      "total_ms": 51
+      "plugin_ms": 0.0,
+      "total_ms": 2
     },
     {
       "id": "T18",
@@ -324,7 +324,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "default",
       "plugin_ms": 0.1,
-      "total_ms": 45
+      "total_ms": 2
     },
     {
       "id": "T19",
@@ -339,8 +339,8 @@
       "indicators": [],
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "static",
-      "plugin_ms": 0.1,
-      "total_ms": 50
+      "plugin_ms": 0.2,
+      "total_ms": 2
     },
     {
       "id": "T20",
@@ -356,7 +356,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "default",
       "plugin_ms": 0.1,
-      "total_ms": 45
+      "total_ms": 2
     },
     {
       "id": "T21",
@@ -374,7 +374,7 @@
       "reason": "Segnale critico: novnc_client_marker",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 51
+      "total_ms": 2
     },
     {
       "id": "T22",
@@ -393,7 +393,7 @@
       "reason": "Segnale critico: bitm_backend_port, guacamole_client_marker",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 46
+      "total_ms": 2
     },
     {
       "id": "T23",
@@ -411,7 +411,7 @@
       "reason": "Segnale critico: xss_reflected_param",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 42
+      "total_ms": 2
     },
     {
       "id": "T24",
@@ -429,7 +429,7 @@
       "reason": "Segnale critico: webauthn_api_override",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 46
+      "total_ms": 2
     },
     {
       "id": "T25",
@@ -447,7 +447,7 @@
       "reason": "Segnale critico: bitm_backend_port",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 49
+      "total_ms": 2
     },
     {
       "id": "T26",
@@ -465,7 +465,7 @@
       "reason": "Segnale critico: bitm_framework_ua",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 44
+      "total_ms": 2
     },
     {
       "id": "T27",
@@ -483,7 +483,7 @@
       "reason": "Segnale critico: bitm_websocket_transport",
       "context": "payment",
       "plugin_ms": 0.1,
-      "total_ms": 48
+      "total_ms": 2
     },
     {
       "id": "T28",
@@ -501,7 +501,7 @@
       "reason": "[ctx=login boost=0.18] stub scorer deterministico (pre_risk_score + segnali)",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 45
+      "total_ms": 2
     },
     {
       "id": "T29",
@@ -517,7 +517,7 @@
       "reason": "stub scorer deterministico (pre_risk_score + segnali)",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 50
+      "total_ms": 3
     }
   ],
   "system": [
@@ -529,9 +529,10 @@
       "detail": "ok",
       "extra": {
         "status": "ok",
-        "version": "7.3.0",
+        "version": "7.4.0",
         "backend": "stub",
         "model": "stub/deterministic",
+        "trajectory_analysis": false,
         "sessions": 0,
         "blocked_ips": 0,
         "store": "memory",
@@ -554,7 +555,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.121 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.40 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -582,7 +583,7 @@
       "cat": "system",
       "name": "Cache LLM velocizza richieste successive",
       "passed": true,
-      "detail": "primo=0.1ms secondo=0.1ms"
+      "detail": "primo=0.0ms secondo=0.1ms"
     },
     {
       "id": "S08",
@@ -599,7 +600,7 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=48ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=1ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",
@@ -642,6 +643,41 @@
       "name": "Shape collector.js triggera segnali BitM/BitM+ (contratto)",
       "passed": true,
       "detail": "action=block  score=0.97  hit=['bitm_backend_port', 'bitm_framework_ua', 'bitm_websocket_transport', 'novnc_client_marker', 'webauthn_api_override', 'xss_reflected_param']  missing_critical=none"
+    },
+    {
+      "id": "S16",
+      "cat": "system",
+      "name": "Health echo trajectory_analysis (v7.4)",
+      "passed": true,
+      "detail": "trajectory_analysis=False"
+    },
+    {
+      "id": "S17",
+      "cat": "system",
+      "name": "Stub determinism trajectory (v7.4)",
+      "passed": true,
+      "detail": "skip: trajectory disabilitato (off)"
+    },
+    {
+      "id": "S18",
+      "cat": "system",
+      "name": "Panic password change detection (v7.4)",
+      "passed": true,
+      "detail": "skip: trajectory disabilitato (off)"
+    },
+    {
+      "id": "S19",
+      "cat": "system",
+      "name": "Direct admin access detection (v7.4)",
+      "passed": true,
+      "detail": "skip: trajectory disabilitato (off)"
+    },
+    {
+      "id": "S20",
+      "cat": "system",
+      "name": "Insufficient history short-circuit (v7.4)",
+      "passed": true,
+      "detail": "skip: trajectory disabilitato (off)"
     }
   ]
 }

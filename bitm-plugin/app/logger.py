@@ -17,7 +17,8 @@ _B  = "\033[1m"
 
 def log_event(ip: str, sid: str, features: dict,
               result: dict, action, elapsed_ms: float,
-              context: str = "default") -> dict:
+              context: str = "default",
+              trajectory: dict | None = None) -> dict:
 
     av     = action.value
     color  = _C.get(av, "")
@@ -58,6 +59,19 @@ def log_event(ip: str, sid: str, features: dict,
         "headless_n":  features.get("headless_score", 0),
         "ua":          (features.get("user_agent") or "")[:80],
     }
+
+    if trajectory:
+        t_score   = trajectory.get("trajectory_score", 0.0)
+        t_pattern = trajectory.get("pattern", "")
+        if t_pattern and t_pattern not in ("disabled",):
+            entry["trajectory_score"]   = round(float(t_score or 0.0), 4)
+            entry["trajectory_pattern"] = t_pattern
+            eu = trajectory.get("explanation_user") or ""
+            ea = trajectory.get("explanation_admin") or ""
+            if eu:
+                entry["explanation_user"]  = eu[:200]
+            if ea:
+                entry["explanation_admin"] = ea[:240]
 
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:

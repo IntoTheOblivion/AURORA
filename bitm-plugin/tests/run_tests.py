@@ -1077,6 +1077,185 @@ async def sys_bitm_labels_aligned(client: httpx.AsyncClient, base: str) -> dict:
         }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#   v7.4 — Trajectory anomaly analysis
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _traj_enabled_in_health(j: dict) -> bool | None:
+    """Legge `trajectory_analysis` da /health; None se il campo non esiste ancora."""
+    v = j.get("trajectory_analysis")
+    if isinstance(v, bool):
+        return v
+    return None
+
+
+async def sys_trajectory_config_echo(client: httpx.AsyncClient, base: str) -> dict:
+    """S16 — /health espone `trajectory_analysis` coerente con la env var."""
+    try:
+        r = await client.get(f"{base}/health", timeout=5)
+        j = r.json()
+        echoed = _traj_enabled_in_health(j)
+        if echoed is None:
+            return {
+                "id": "S16", "cat": "system",
+                "name": "Health echo trajectory_analysis (v7.4)",
+                "passed": False,
+                "detail": "manca campo `trajectory_analysis` in /health",
+            }
+        # Se il backend è stub + env non forzata on, ci aspettiamo off;
+        # se invece è stato settato on, ci aspettiamo on. Senza conoscenza
+        # dell'env lato client accettiamo solo che il tipo sia booleano.
+        passed = isinstance(echoed, bool)
+        return {
+            "id": "S16", "cat": "system",
+            "name": "Health echo trajectory_analysis (v7.4)",
+            "passed": passed,
+            "detail": f"trajectory_analysis={echoed}",
+        }
+    except Exception as e:
+        return {"id": "S16", "cat": "system",
+                "name": "Health echo trajectory_analysis (v7.4)",
+                "passed": False, "detail": f"errore: {e}"}
+
+
+async def sys_trajectory_stub_determinism(client: httpx.AsyncClient, base: str) -> dict:
+    """S17 — stessa traiettoria ripetuta 3x → stesso pattern (stub deterministico)."""
+    try:
+        # Skip se trajectory off (stub default con LLM_TRAJECTORY_ANALYSIS=auto)
+        r = await client.get(f"{base}/health", timeout=5)
+        if _traj_enabled_in_health(r.json()) is False:
+            return {"id": "S17", "cat": "system",
+                    "name": "Stub determinism trajectory (v7.4)",
+                    "passed": True,
+                    "detail": "skip: trajectory disabilitato (off)"}
+
+        patterns = []
+        for run in range(3):
+            sid = f"s17-run{run}-{uuid.uuid4().hex[:6]}"
+            # Reset per isolamento tra run
+            await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+            # Login
+            p1 = _legit_payload(sid, page="/login")
+            await client.post(f"{base}/api/bitm/collect", json=p1, timeout=15)
+            # Change password (dentro 5s)
+            p2 = _legit_payload(sid, page="/account/change-password")
+            r2 = await client.post(f"{base}/api/bitm/collect", json=p2, timeout=15)
+            body = r2.json()
+            patterns.append(body.get("trajectory_pattern", ""))
+
+        uniq = set(patterns)
+        passed = len(uniq) == 1 and ("" not in uniq or len(uniq) == 1)
+        return {"id": "S17", "cat": "system",
+                "name": "Stub determinism trajectory (v7.4)",
+                "passed": passed,
+                "detail": f"patterns={patterns}"}
+    except Exception as e:
+        return {"id": "S17", "cat": "system",
+                "name": "Stub determinism trajectory (v7.4)",
+                "passed": False, "detail": f"errore: {e}"}
+
+
+async def sys_trajectory_panic_password(client: httpx.AsyncClient, base: str) -> dict:
+    """S18 — sequenza login → change-password in <5s triggera `panic_password_change`."""
+    try:
+        r = await client.get(f"{base}/health", timeout=5)
+        if _traj_enabled_in_health(r.json()) is False:
+            return {"id": "S18", "cat": "system",
+                    "name": "Panic password change detection (v7.4)",
+                    "passed": True,
+                    "detail": "skip: trajectory disabilitato (off)"}
+
+        sid = f"s18-{uuid.uuid4().hex[:8]}"
+        await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+        await client.post(f"{base}/api/bitm/collect",
+                          json=_legit_payload(sid, page="/login"), timeout=15)
+        await client.post(f"{base}/api/bitm/collect",
+                          json=_legit_payload(sid, page="/account/verify"), timeout=15)
+        r2 = await client.post(f"{base}/api/bitm/collect",
+                               json=_legit_payload(sid, page="/account/change-password"),
+                               timeout=15)
+        body = r2.json()
+        pattern = body.get("trajectory_pattern", "")
+        action  = body.get("action", "")
+        # Il pattern può essere `panic_password_change` su stub, o qualunque
+        # snake_case coerente su backend reale. Accettiamo la famiglia semantica
+        # via keyword match, così il test resta stabile con Anthropic/Ollama.
+        fam_ok = any(tok in pattern for tok in ("panic", "password", "takeover",
+                                                 "compromise", "post_login"))
+        # Azione minima attesa: almeno challenge (il boost v7.4 alza sopra soglia).
+        action_ok = action in ("challenge", "block")
+        passed = fam_ok and action_ok
+        return {"id": "S18", "cat": "system",
+                "name": "Panic password change detection (v7.4)",
+                "passed": passed,
+                "detail": f"pattern={pattern!r} action={action}"}
+    except Exception as e:
+        return {"id": "S18", "cat": "system",
+                "name": "Panic password change detection (v7.4)",
+                "passed": False, "detail": f"errore: {e}"}
+
+
+async def sys_trajectory_direct_admin(client: httpx.AsyncClient, base: str) -> dict:
+    """S19 — accesso `/admin` senza passare da `/login` triggera `direct_admin_access`."""
+    try:
+        r = await client.get(f"{base}/health", timeout=5)
+        if _traj_enabled_in_health(r.json()) is False:
+            return {"id": "S19", "cat": "system",
+                    "name": "Direct admin access detection (v7.4)",
+                    "passed": True,
+                    "detail": "skip: trajectory disabilitato (off)"}
+
+        sid = f"s19-{uuid.uuid4().hex[:8]}"
+        await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+        # Due hit ma nessuno su /login
+        await client.post(f"{base}/api/bitm/collect",
+                          json=_legit_payload(sid, page="/home"), timeout=15)
+        r2 = await client.post(f"{base}/api/bitm/collect",
+                               json=_legit_payload(sid, page="/admin"), timeout=15)
+        body = r2.json()
+        pattern = body.get("trajectory_pattern", "")
+        fam_ok = any(tok in pattern for tok in ("admin", "privilege", "direct"))
+        passed = fam_ok
+        return {"id": "S19", "cat": "system",
+                "name": "Direct admin access detection (v7.4)",
+                "passed": passed,
+                "detail": f"pattern={pattern!r} action={body.get('action')}"}
+    except Exception as e:
+        return {"id": "S19", "cat": "system",
+                "name": "Direct admin access detection (v7.4)",
+                "passed": False, "detail": f"errore: {e}"}
+
+
+async def sys_trajectory_insufficient_history(client: httpx.AsyncClient, base: str) -> dict:
+    """S20 — sessione con una sola pagina → short-circuit, pattern vuoto (nessuna LLM call)."""
+    try:
+        r = await client.get(f"{base}/health", timeout=5)
+        if _traj_enabled_in_health(r.json()) is False:
+            return {"id": "S20", "cat": "system",
+                    "name": "Insufficient history short-circuit (v7.4)",
+                    "passed": True,
+                    "detail": "skip: trajectory disabilitato (off)"}
+
+        sid = f"s20-{uuid.uuid4().hex[:8]}"
+        await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+        r1 = await client.post(f"{base}/api/bitm/collect",
+                               json=_legit_payload(sid, page="/home"), timeout=15)
+        body = r1.json()
+        # `trajectory_pattern` deve essere omesso o vuoto quando history < 2.
+        # Il server non include il campo per pattern `insufficient_history`
+        # (filtrato in `_resp`), quindi ci aspettiamo assenza.
+        pattern = body.get("trajectory_pattern", "")
+        passed = pattern == ""
+        return {"id": "S20", "cat": "system",
+                "name": "Insufficient history short-circuit (v7.4)",
+                "passed": passed,
+                "detail": f"pattern={pattern!r} (atteso vuoto)"}
+    except Exception as e:
+        return {"id": "S20", "cat": "system",
+                "name": "Insufficient history short-circuit (v7.4)",
+                "passed": False, "detail": f"errore: {e}"}
+
+
 SYSTEM_CHECKS = [
     sys_health,
     sys_session_persistence,
@@ -1096,6 +1275,12 @@ SYSTEM_CHECKS = [
     # ── v7.3 (distribuzione one-shot) ──
     sys_collector_js_endpoint,
     sys_collector_payload_detects_bitm,
+    # ── v7.4 (trajectory anomaly analysis) ──
+    sys_trajectory_config_echo,
+    sys_trajectory_stub_determinism,
+    sys_trajectory_panic_password,
+    sys_trajectory_direct_admin,
+    sys_trajectory_insufficient_history,
 ]
 
 

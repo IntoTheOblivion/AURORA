@@ -14,6 +14,8 @@ import os
 import json
 import time
 import asyncio
+import hashlib
+
 import httpx
 import anthropic
 
@@ -22,6 +24,7 @@ from app.config import (
     ANTHROPIC_API_KEY, ANTHROPIC_MODELS,
     OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_TIMEOUT,
     CACHE_TTL_S,
+    TRAJECTORY_CACHE_TTL_S,
 )
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
@@ -484,4 +487,344 @@ async def score_session(features: dict) -> dict:
         return result  # non caching degli errori
 
     _cache_set(cache_key, result)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v7.4 — Trajectory Anomaly Analysis
+# ─────────────────────────────────────────────────────────────────────────────
+# Secondo layer LLM che legge la SEQUENZA di pagine di una sessione e i suoi
+# timing, per riconoscere pattern che il fingerprint-scorer non può vedere:
+#   - panic_password_change: login → change-password in pochi secondi
+#   - direct_admin_access:   /admin senza precedente /login
+#   - rapid_navigation:      molte pagine in pochissimo tempo (scraping)
+# Ritorna sempre quattro campi:
+#   trajectory_score (float 0-1), pattern (snake_case),
+#   explanation_user (italiano, <=160 char), explanation_admin (<=200 char).
+# Disattivato di default con LLM_BACKEND=stub (auto off). Quando abilitato
+# esplicitamente su stub, usa regole deterministiche per garantire che CI
+# possa esercitare il percorso senza dipendere da un LLM reale.
+
+_trajectory_cache: dict = {}
+
+
+TRAJECTORY_SYSTEM_PROMPT = """\
+Analizzi la traiettoria di una sessione web per individuare pattern di \
+compromissione o automazione che non emergono dal solo fingerprint.
+
+Rispondi SOLO con un oggetto JSON su una singola riga. Nessun testo, commento \
+o markdown fuori dal JSON.
+
+Schema ESATTO:
+{"trajectory_score":<float 0-1>,"pattern":"<snake_case>","explanation_user":"<=160 char, italiano>","explanation_admin":"<=200 char, tecnico>"}
+
+Pattern tipici (usa questi nomi quando applicabili):
+ panic_password_change  login → change-password in <5s (ATO)
+ direct_admin_access    /admin senza precedente /login
+ rapid_navigation       >5 pagine in <2s (scraping/crawler)
+ normal_flow            nessuna anomalia
+
+trajectory_score:
+ 0.00-0.20 normale
+ 0.21-0.50 sospetto (boost su soglie contestuali)
+ 0.51-1.00 forte indicatore compromissione
+
+explanation_user: rivolto all'utente finale, in italiano, senza gergo tecnico.
+explanation_admin: rivolto all'operatore, tecnico ma conciso."""
+
+
+def _cache_get_traj(key: str) -> dict | None:
+    entry = _trajectory_cache.get(key)
+    if entry:
+        result, ts = entry
+        if time.time() - ts < TRAJECTORY_CACHE_TTL_S:
+            return result
+        del _trajectory_cache[key]
+    return None
+
+
+def _cache_set_traj(key: str, result: dict) -> None:
+    _trajectory_cache[key] = (result, time.time())
+    if len(_trajectory_cache) > 2000:
+        oldest = min(_trajectory_cache, key=lambda k: _trajectory_cache[k][1])
+        del _trajectory_cache[oldest]
+
+
+def _traj_default(pattern: str = "normal_flow",
+                  score: float = 0.0,
+                  user: str = "",
+                  admin: str = "") -> dict:
+    return {
+        "trajectory_score": round(max(0.0, min(1.0, float(score))), 3),
+        "pattern":          pattern,
+        "explanation_user": (user or "")[:160],
+        "explanation_admin": (admin or "")[:200],
+    }
+
+
+def _validate_trajectory_result(result: dict) -> dict:
+    """Normalizza la risposta LLM sulla traiettoria (schema trajectory)."""
+    try:
+        score = max(0.0, min(1.0, float(result.get("trajectory_score", 0.0))))
+    except (TypeError, ValueError):
+        score = 0.0
+    pattern = str(result.get("pattern") or "normal_flow").strip().replace(" ", "_")[:40] or "normal_flow"
+    user = str(result.get("explanation_user") or "")[:160]
+    admin = str(result.get("explanation_admin") or "")[:200]
+    return {
+        "trajectory_score":  round(score, 3),
+        "pattern":           pattern,
+        "explanation_user":  user,
+        "explanation_admin": admin,
+    }
+
+
+def _build_trajectory_prompt(session_state: dict, features: dict) -> str:
+    pages = list(session_state.get("pages") or [])[-10:]
+    timings = list(session_state.get("timings") or [])[-10:]
+    first_seen = session_state.get("first_seen")
+    elapsed_s = round(max(0.0, time.time() - float(first_seen)), 2) if first_seen else 0.0
+
+    pre_risk = features.get("pre_risk_score", 0.0)
+    confirmed = features.get("confirmed_signals") or []
+    confirmed_str = ", ".join(confirmed[:6]) if confirmed else "nessuno"
+    context_hint = features.get("page_sequence") and features["page_sequence"][-1] or (pages[-1] if pages else "/")
+
+    return (
+        f"=== TRAIETTORIA SESSIONE ===\n"
+        f"pages (ultime {len(pages)}): {' > '.join(pages) if pages else '/'}\n"
+        f"request_timings_ms (client-measured): {timings}\n"
+        f"session_elapsed_s: {elapsed_s}\n"
+        f"current_page: {context_hint}\n\n"
+        f"=== CONTESTO SCORER FINGERPRINT ===\n"
+        f"pre_risk_score: {pre_risk:.3f}\n"
+        f"confirmed_signals: {confirmed_str}\n\n"
+        f"Rispondi SOLO con il JSON della traiettoria."
+    )
+
+
+# ── Detection deterministica (stub) ──────────────────────────────────────────
+
+_LOGIN_TOKENS        = ("login", "signin", "auth", "accedi", "logon")
+_CHANGE_PW_TOKENS    = ("change-password", "password/change", "reset-password",
+                        "cambia-password", "password-reset")
+_SENSITIVE_PW_TOKENS = ("password", "credentials", "email")
+
+
+def _analyze_trajectory_stub(session_state: dict, features: dict) -> dict:
+    """
+    Regole deterministiche 1:1 con i nomi di pattern noti.
+    Usate quando LLM_BACKEND=stub ma l'utente ha esplicitamente abilitato
+    la feature per testarla senza LLM reale (CI, demo offline).
+    """
+    pages = [str(p).lower() for p in (session_state.get("pages") or [])]
+    first_seen = session_state.get("first_seen")
+    elapsed = (time.time() - float(first_seen)) if first_seen else float(len(pages))
+
+    has_login = any(any(tok in p for tok in _LOGIN_TOKENS) for p in pages)
+    has_change_pw = any(any(tok in p for tok in _CHANGE_PW_TOKENS) for p in pages)
+    has_admin = any(p.startswith("/admin") for p in pages)
+
+    if has_login and has_change_pw and elapsed < 5.0:
+        return _traj_default(
+            pattern="panic_password_change",
+            score=0.55,
+            user="Attività insolita sul tuo account: cambio password subito dopo il login. "
+                 "Per sicurezza stiamo verificando che sia davvero tu.",
+            admin=(f"login→change-password in {elapsed:.2f}s ({len(pages)} pagine). "
+                   f"Sospetto account takeover."),
+        )
+
+    if has_admin and not has_login:
+        return _traj_default(
+            pattern="direct_admin_access",
+            score=0.40,
+            user="Accesso diretto a un'area riservata senza login visibile. Verifichiamo la richiesta.",
+            admin=f"Accesso /admin senza precedente /login in traiettoria di {len(pages)} pagine",
+        )
+
+    if len(pages) >= 5 and elapsed < 2.0:
+        return _traj_default(
+            pattern="rapid_navigation",
+            score=0.28,
+            user="Navigazione molto rapida tra diverse pagine — potrebbe essere automatizzata.",
+            admin=f"Rapid navigation: {len(pages)} pagine in {elapsed:.2f}s",
+        )
+
+    return _traj_default(
+        pattern="normal_flow",
+        score=0.0,
+        user="",
+        admin=f"Nessuna anomalia di traiettoria ({len(pages)} pagine, {elapsed:.2f}s)",
+    )
+
+
+# ── Backend Anthropic per traiettoria ────────────────────────────────────────
+
+async def _analyze_trajectory_anthropic(session_state: dict, features: dict) -> dict:
+    if not ANTHROPIC_API_KEY or not ANTHROPIC_API_KEY.startswith("sk-"):
+        return _traj_default(pattern="backend_unavailable",
+                             admin="ANTHROPIC_API_KEY mancante")
+
+    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    model = await _anthropic_pick_model(client)
+    prompt = _build_trajectory_prompt(session_state, features)
+    raw = ""
+
+    for attempt in range(3):
+        try:
+            msg = await client.messages.create(
+                model=model,
+                max_tokens=220,
+                system=TRAJECTORY_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = msg.content[0].text
+            return _validate_trajectory_result(_parse_llm_response(raw))
+
+        except json.JSONDecodeError:
+            print(f"[scorer/trajectory/anthropic] JSONDecodeError (attempt {attempt+1}/3) raw: {raw[:150]!r}")
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return _traj_default(pattern="parse_error",
+                                 admin="Risposta LLM non JSON")
+
+        except anthropic.APIStatusError as e:
+            code = e.status_code
+            print(f"[scorer/trajectory/anthropic] HTTP {code} (attempt {attempt+1}/3)")
+            if code == 529 and attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            return _traj_default(pattern="api_error",
+                                 admin=f"Anthropic HTTP {code}")
+
+        except Exception as e:
+            print(f"[scorer/trajectory/anthropic] {type(e).__name__}: {e}")
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return _traj_default(pattern="unknown_error",
+                                 admin=str(e)[:80])
+
+    return _traj_default(pattern="max_retries", admin="Troppi tentativi falliti")
+
+
+# ── Backend Ollama per traiettoria ───────────────────────────────────────────
+
+async def _analyze_trajectory_ollama(session_state: dict, features: dict) -> dict:
+    prompt = _build_trajectory_prompt(session_state, features)
+    url = f"{OLLAMA_HOST}/api/chat"
+    payload = {
+        "model":  OLLAMA_MODEL,
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0.1, "num_predict": 220},
+        "messages": [
+            {"role": "system", "content": TRAJECTORY_SYSTEM_PROMPT},
+            {"role": "user",   "content": prompt},
+        ],
+    }
+
+    raw = ""
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+                resp = await client.post(url, json=payload)
+
+            if resp.status_code != 200:
+                print(f"[scorer/trajectory/ollama] HTTP {resp.status_code} (attempt {attempt+1}/3)")
+                if resp.status_code in (500, 503) and attempt < 2:
+                    await asyncio.sleep(2)
+                    continue
+                return _traj_default(pattern="ollama_http_error",
+                                     admin=f"Ollama HTTP {resp.status_code}")
+
+            data = resp.json()
+            raw = data.get("message", {}).get("content", "")
+            if not raw:
+                raise json.JSONDecodeError("Risposta Ollama vuota", "", 0)
+            return _validate_trajectory_result(_parse_llm_response(raw))
+
+        except json.JSONDecodeError:
+            print(f"[scorer/trajectory/ollama] JSONDecodeError (attempt {attempt+1}/3)")
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return _traj_default(pattern="parse_error",
+                                 admin="Risposta Ollama non JSON")
+
+        except httpx.ConnectError:
+            if attempt < 2:
+                await asyncio.sleep(2)
+                continue
+            return _traj_default(pattern="ollama_connection_error",
+                                 admin="Ollama non raggiungibile")
+
+        except httpx.TimeoutException:
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return _traj_default(pattern="ollama_timeout",
+                                 admin=f"Timeout Ollama {OLLAMA_TIMEOUT}s")
+
+        except Exception as e:
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return _traj_default(pattern="unknown_error", admin=str(e)[:80])
+
+    return _traj_default(pattern="max_retries", admin="Troppi tentativi Ollama falliti")
+
+
+# ── Entry point pubblico ─────────────────────────────────────────────────────
+
+async def analyze_trajectory(session_state: dict, features: dict) -> dict:
+    """
+    Analizza la traiettoria di sessione (pages, timings) e ritorna sempre
+    un dict con {trajectory_score, pattern, explanation_user, explanation_admin}.
+
+    Short-circuit: meno di 2 pagine visitate → pattern insufficient_history
+    senza chiamare alcun LLM.
+
+    Cache per sessione keyed su (sid o ip) + len(pages): evita di spendere
+    token quando la stessa sessione pinga ripetutamente la stessa pagina.
+    """
+    pages = list(session_state.get("pages") or [])
+
+    if len(pages) < 2:
+        return _traj_default(
+            pattern="insufficient_history",
+            score=0.0,
+            admin=f"Solo {len(pages)} pagina(e) in sessione — traiettoria non analizzabile",
+        )
+
+    # Cache key stabile per la sessione corrente. Include session_id quando
+    # disponibile + hash della tupla pages, così sessioni diverse con lo stesso
+    # fingerprint (e.g. stesso canvas_hash + ip) non collidono, e una nuova
+    # pagina invalida automaticamente l'entry.
+    sid     = session_state.get("session_id") or \
+              f"{features.get('canvas_hash','x')}:{features.get('ip','?')}"
+    pages_sig = hashlib.md5("|".join(pages).encode("utf-8")).hexdigest()[:12]
+    cache_key = f"{sid}:{len(pages)}:{pages_sig}"
+    cached = _cache_get_traj(cache_key)
+    if cached:
+        return {**cached, "_from_cache": True}
+
+    if LLM_BACKEND == "stub":
+        result = _analyze_trajectory_stub(session_state, features)
+    elif LLM_BACKEND == "ollama":
+        result = await _analyze_trajectory_ollama(session_state, features)
+    else:
+        result = await _analyze_trajectory_anthropic(session_state, features)
+
+    # Non cachiamo errori backend per poter ritentare rapidamente
+    if result.get("pattern") in (
+        "api_error", "parse_error", "ollama_http_error",
+        "ollama_connection_error", "ollama_timeout",
+        "unknown_error", "max_retries", "backend_unavailable",
+    ):
+        return result
+
+    _cache_set_traj(cache_key, result)
     return result

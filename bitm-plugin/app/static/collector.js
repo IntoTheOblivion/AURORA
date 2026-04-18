@@ -150,10 +150,64 @@
       credentials: "omit",
     });
     var result = await resp.json();
+    try {
+      window.BitM.lastExplanation = result.explanation_user || "";
+      if (result.action && result.action !== "allow" && result.explanation_user) {
+        showExplanationBanner(result);
+      }
+    } catch (_) { /* ignore banner errors */ }
     listeners.forEach(function (fn) {
       try { fn(result, fp); } catch (_) { /* ignore listener errors */ }
     });
     return result;
+  }
+
+  // Banner in-page (Shadow DOM) — stesso pattern dell'estensione BitM Shield.
+  // Isolamento dallo stile del sito; sempre dismissible; non intercetta il submit
+  // (il collector è lato-sito, la difesa attiva è compito dell'estensione).
+  var _bannerShown = false;
+  function showExplanationBanner(result) {
+    if (_bannerShown) return;
+    if (typeof document === "undefined") return;
+    _bannerShown = true;
+    try {
+      var isBlock = result.action === "block";
+      var bg = isBlock ? "#c0392b" : "#d68910";
+      var title = isBlock ? "Richiesta bloccata" : "Richiesta sospetta";
+      var host = document.createElement("div");
+      host.id = "__bitm_collector_banner__";
+      host.style.cssText =
+        "position:fixed;top:0;left:0;right:0;z-index:2147483647;";
+      var shadow = host.attachShadow({ mode: "closed" });
+      shadow.innerHTML =
+        "<style>" +
+        ".b{font:13px/1.4 system-ui,Arial,sans-serif;background:" + bg + ";" +
+        "color:#fff;padding:10px 14px;display:flex;align-items:center;gap:12px;" +
+        "box-shadow:0 2px 6px rgba(0,0,0,.25)}" +
+        ".t{flex:1}" +
+        ".t strong{display:block;font-size:14px}" +
+        ".t span{opacity:.92;font-size:12px}" +
+        ".x{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:3px;" +
+        "padding:4px 10px;cursor:pointer;font-size:12px}" +
+        ".x:hover{background:rgba(255,255,255,.28)}" +
+        "</style>" +
+        "<div class='b' role='alert'>" +
+        "<div class='t'><strong>" + esc(title) + "</strong>" +
+        "<span>" + esc(result.explanation_user) + "</span></div>" +
+        "<button class='x' id='close'>Chiudi</button>" +
+        "</div>";
+      document.documentElement.appendChild(host);
+      shadow.getElementById("close").addEventListener("click", function () {
+        try { host.remove(); } catch (_) { /* noop */ }
+      });
+    } catch (_) { /* niente banner se il DOM non lo permette */ }
+  }
+
+  function esc(s) {
+    return String(s || "").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;",
+               '"': "&quot;", "'": "&#39;" }[c];
+    });
   }
 
   function onResult(fn) {
@@ -161,11 +215,12 @@
   }
 
   window.BitM = {
-    classify:    classify,
-    fingerprint: fingerprint,
-    onResult:    onResult,
-    endpoint:    ENDPOINT,
-    version:     "7.3",
+    classify:        classify,
+    fingerprint:     fingerprint,
+    onResult:        onResult,
+    endpoint:        ENDPOINT,
+    version:         "7.4",
+    lastExplanation: "",
   };
 
   if (AUTO) {
