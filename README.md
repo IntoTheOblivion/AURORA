@@ -2,7 +2,7 @@
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 7.4.0** (runtime) · **Estensione browser v0.1.0** (BitM Shield, MV3)
+> **Versione corrente: 7.4.0** (runtime) · **Estensione browser v0.2.0** (BitM Shield, MV3)
 > Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`bitm-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
@@ -1305,6 +1305,19 @@ console.log(JSON.stringify(self.BitMDetection.detect({
 - **Config** (`app/config.py`, `.env.example`): `LLM_TRAJECTORY_ANALYSIS=auto|on|off` (default `auto` → on se backend reale, off su stub per zero regressioni). `TRAJECTORY_CACHE_TTL=60` per cache session-keyed che evita token-burn su ping ripetuti
 - **Health echo** (`GET /health`): nuovo campo `trajectory_analysis: bool` coerente con la env var
 - **Test suite**: 44 → 49 casi. Aggiunti **T30 `trajectory_panic_password_change`** (login→change-password in <3s → pattern + challenge), **T31 `trajectory_direct_admin`** (accesso `/admin` senza `/login` → direct_admin_access), **T32 `trajectory_insufficient_history`** (una sola pagina → short-circuit senza chiamare LLM), **S16 `sys_trajectory_config_echo`** (`/health` coerente con env), **S17 `sys_trajectory_stub_determinism`** (stesso input → stesso pattern, CI deterministica)
+
+
+
+### v0.2.0 (estensione) — BitM Shield backend-aware hardening
+- **Tre modalità operative** (popup → Settings → `off | local | hybrid`). Default `local` preserva l'invariante v0.1: zero rete, zero storage remoto. `hybrid` opt-in: l'estensione POSTa fingerprint + trajectory al backend `/api/bitm/collect` e riceve `explanation_user`/`trajectory_pattern` generati da LLM (riusa la pipeline v7.4)
+- **Banner condiviso** (`src/banner.js`): Shadow DOM `mode:"closed"`, colori rosso `#c0392b` (block) / arancio `#d68910` (challenge), titolo i18n "Richiesta bloccata"/"Richiesta sospetta"/"Blocked request". Se `explanation_user` arriva dal backend sostituisce il fallback locale. Stessa forma del banner `collector.js` v7.4 (DRY cross-component)
+- **Session tracker** (`src/session.js`): accumula `pages[]+timings[]` per-origin in `sessionStorage`, sliding window 20/40, inviato al backend come contesto trajectory per ottenere pattern `panic_password_change` / `direct_admin_access` / `rapid_navigation`
+- **Hardening MV3 a livello rete** (`src/net-rules.js` + `src/net-rules.json`): `declarativeNetRequest` con ruleset statico (blocca qualsiasi URL contenente `/websockify` o `/guacamole/`) + regole dinamiche opt-in che bloccano `ngrok.io`, `ngrok-free.{app,dev}`, `trycloudflare.com`, `loca.lt`, `localtunnel.me`, `serveo.net`. Toggle da popup
+- **Popup 3-tab** (`src/popup.{html,js,css}`): **Stato** (verdict + pattern + explanation + badge online/offline/locale), **Storico** (ring buffer 50 eventi non-allow in `chrome.storage.local`), **Impostazioni** (mode radio, URL backend, `Testa connessione` → `/health`, toggle net-rules)
+- **i18n Chrome nativo** (`_locales/it/messages.json`, `_locales/en/messages.json`): default italiano, fallback automatico inglese; copre banner, popup, badge
+- **Offline-first**: se il backend è irraggiungibile in `mode=hybrid`, il service worker fa fallback silenzioso al verdict locale (AbortController timeout 2.5s, nessuna eccezione user-visibile, nessun retry loop)
+- **Privacy**: in `hybrid` partono solo `sessionId` (UUID locale) + user-agent + path + fingerprint browser verso il solo `backendUrl` configurato. Zero cookie, zero body form, zero credenziali. Vedi `bitm-extension/README.md` per i dettagli
+- **Test manuali** (`tests/manual_playwright.js`, non CI): 4 scenari — local offline, hybrid con backend attivo, hybrid con backend spento (fallback), declarativeNetRequest attivo
 
 
 

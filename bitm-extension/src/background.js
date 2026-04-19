@@ -17,6 +17,9 @@ try {
 
 // ── Stato in memoria ────────────────────────────────────────────────────────
 const state = new Map(); // tabId → verdict payload
+// Esposto su self per permettere test E2E (tests/e2e_hybrid.js) di leggere
+// lo stato via serviceWorker.evaluate. Non usato dal runtime dell'estensione.
+self.__bitmState = state;
 const HISTORY_KEY = "bitm-history";
 const HISTORY_MAX = 50;
 const RANK = { allow: 0, challenge: 1, block: 2 };
@@ -41,15 +44,35 @@ function applyBadge(tabId, verdict) {
   } catch (_) { /* tab chiusa */ }
 }
 
-// ── History ring buffer (chrome.storage.local) ──────────────────────────────
-async function pushHistory(entry) {
+// ── URL safety ──────────────────────────────────────────────────────────────
+// Accettiamo solo http/https: file:, chrome-extension:, javascript:, data:
+// non sono backend legittimi e data:/javascript: potrebbero essere usati per
+// smuggling se l'UI non filtrasse l'input.
+function safeBackendUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
   try {
-    const items = await chrome.storage.local.get([HISTORY_KEY]);
-    const list  = Array.isArray(items[HISTORY_KEY]) ? items[HISTORY_KEY] : [];
-    list.unshift(entry);
-    if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
-    await chrome.storage.local.set({ [HISTORY_KEY]: list });
-  } catch (_) { /* quota / disabled */ }
+    const u = new URL(s);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    return u.origin + u.pathname.replace(/\/$/, "");
+  } catch (_) { return ""; }
+}
+
+// ── History ring buffer (chrome.storage.local) ──────────────────────────────
+// Serializziamo le scritture per evitare race read-modify-write quando più
+// tab concludono un verdict in rapida successione.
+let historyWriteChain = Promise.resolve();
+function pushHistory(entry) {
+  historyWriteChain = historyWriteChain.then(async () => {
+    try {
+      const items = await chrome.storage.local.get([HISTORY_KEY]);
+      const list  = Array.isArray(items[HISTORY_KEY]) ? items[HISTORY_KEY] : [];
+      list.unshift(entry);
+      if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+      await chrome.storage.local.set({ [HISTORY_KEY]: list });
+    } catch (_) { /* quota / disabled */ }
+  });
+  return historyWriteChain;
 }
 
 // ── Merge locale + remoto ───────────────────────────────────────────────────
@@ -72,12 +95,13 @@ function mergeVerdicts(local, remote) {
 }
 
 async function reportToBackend(local, fingerprint, trajectory, settings) {
-  // Skip remoto: mode non-hybrid, URL non settato, o block locale già certo.
+  // Skip remoto: mode non-hybrid, URL non settato/invalido, o block locale certo.
   if (settings.mode !== "hybrid") return local;
-  if (!settings.backendUrl)       return local;
+  const base = safeBackendUrl(settings.backendUrl);
+  if (!base) return local;
   if (local.verdict === "block" && local.critical) return local;
 
-  const url = settings.backendUrl.replace(/\/$/, "") + "/api/bitm/collect";
+  const url = base + "/api/bitm/collect";
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
@@ -162,7 +186,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "bitm-popup-test-connection") {
     (async () => {
       try {
-        const url = String(msg.backendUrl || "").replace(/\/$/, "") + "/health";
+        const base = safeBackendUrl(msg.backendUrl);
+        if (!base) { sendResponse({ ok: false, error: "invalid_scheme" }); return; }
+        const url = base + "/health";
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 2500);
         const r = await fetch(url, { signal: controller.signal });

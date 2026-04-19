@@ -2,14 +2,15 @@
  * BitM Shield — page-hook.js
  *
  * Gira nel MAIN world della pagina (stesso contesto dello script della pagina).
- * Raccoglie segnali che il content script (ISOLATED world) non vede:
+ * Raccoglie SOLO segnali che il content script (ISOLATED world) non vede:
  *   - endpoint WebSocket aperti dalla pagina (WebSocket patcher)
  *   - nativeness di navigator.credentials.get (evilGet detection)
- *   - fingerprint aggiuntivi per hybrid mode (plugins, WebGL, canvas, lingue,
- *     timezone, screen, colorDepth, platform) — tutti dati locali, nessuna
- *     richiesta di rete da qui.
  *
- * Invio via window.postMessage con envelope { source: "bitm-hook", ... }.
+ * ATTENZIONE privacy: il canale `window.postMessage(..., "*")` è leggibile
+ * da qualunque script della pagina. Per questo NON raccogliamo qui canvas,
+ * plugins, WebGL renderer, lingue, timezone: quelli stanno in content-script
+ * (ISOLATED world, irraggiungibile alla pagina) e vengono mergiati solo prima
+ * dell'invio al backend, mai echeggiati indietro al MAIN world.
  */
 (function () {
   "use strict";
@@ -49,66 +50,6 @@
     }
   }
 
-  // ── Canvas fingerprint (solo hash corto, no dati grezzi) ────────────────────
-  function canvasFingerprint() {
-    try {
-      var c = document.createElement("canvas");
-      c.width = 120; c.height = 32;
-      var ctx = c.getContext("2d");
-      ctx.textBaseline = "top";
-      ctx.font = "14px Arial";
-      ctx.fillStyle = "#069";
-      ctx.fillText("BitMShield", 2, 2);
-      ctx.fillStyle = "rgba(128,128,64,.8)";
-      ctx.fillRect(60, 4, 20, 14);
-      return c.toDataURL().slice(0, 80); // prefisso stabile, basta al backend
-    } catch (_) { return ""; }
-  }
-
-  // ── WebGL renderer ──────────────────────────────────────────────────────────
-  function webglRenderer() {
-    try {
-      var c = document.createElement("canvas");
-      var gl = c.getContext("webgl") || c.getContext("experimental-webgl");
-      if (!gl) return "";
-      var ext = gl.getExtension("WEBGL_debug_renderer_info");
-      if (!ext) return String(gl.getParameter(gl.RENDERER) || "");
-      return String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "");
-    } catch (_) { return ""; }
-  }
-
-  function pluginNames() {
-    try {
-      var out = [];
-      var ps = navigator.plugins || [];
-      for (var i = 0; i < ps.length; i++) {
-        if (ps[i] && ps[i].name) out.push(String(ps[i].name));
-      }
-      return out;
-    } catch (_) { return []; }
-  }
-
-  function languages() {
-    try {
-      if (navigator.languages && navigator.languages.length)
-        return Array.prototype.slice.call(navigator.languages).map(String);
-      if (navigator.language) return [String(navigator.language)];
-      return [];
-    } catch (_) { return []; }
-  }
-
-  function timezone() {
-    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
-    catch (_) { return ""; }
-  }
-
-  function screenRes() {
-    try {
-      return (screen && screen.width && screen.height)
-        ? (screen.width + "x" + screen.height) : "";
-    } catch (_) { return ""; }
-  }
-
   function snapshot(reason) {
     var now = (typeof performance !== "undefined" && performance.now)
       ? performance.now() : Date.now();
@@ -118,21 +59,11 @@
       pageUrl: location.href || "",
       referrer: document.referrer || "",
       userAgent: navigator.userAgent || "",
-      platform: navigator.platform || "",
       wsEndpoints: wsEndpoints.slice(),
       credentialsGetNative: credentialsGetNative(),
       iframeCount: (function () {
         try { return document.getElementsByTagName("iframe").length; }
         catch (_) { return 0; }
-      })(),
-      plugins: pluginNames(),
-      webgl: webglRenderer(),
-      canvas: canvasFingerprint(),
-      languages: languages(),
-      timezone: timezone(),
-      screenRes: screenRes(),
-      colorDepth: (function () {
-        try { return (screen && screen.colorDepth) || 24; } catch (_) { return 24; }
       })(),
       timing: Math.round(now - startedAt),
     };
