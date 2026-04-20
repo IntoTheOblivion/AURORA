@@ -150,30 +150,43 @@
       historyList.appendChild(li);
       return;
     }
+    var ALLOWED_VERDICT = { block: 1, challenge: 1, allow: 1 };
     list.forEach(function (ev) {
       var li = document.createElement("li");
       var when = new Date(ev.at).toLocaleString();
       var origin = ev.origin || (function () { try { return new URL(ev.url).origin; } catch (_) { return "—"; } })();
-      li.innerHTML =
-        "<span class='row-verdict " + ev.verdict + "'>" +
-        (ev.verdict === "block"
-          ? t("popup_verdict_block", "Bloccato")
-          : t("popup_verdict_challenge", "Sospetto")) +
-        "</span>" +
-        "<strong></strong>" +
-        (ev.pattern ? " <span class='mono'>" + "</span>" : "") +
-        "<div class='row-meta mono'></div>" +
-        "<div>" + (ev.explanationUser ? "" : "") + "</div>";
-      li.querySelector("strong").textContent = origin;
-      var metaDiv = li.querySelector(".row-meta");
-      metaDiv.textContent = when + "  ·  " + (ev.signals || []).join(", ");
+      var verdictClass = ALLOWED_VERDICT[ev.verdict] ? ev.verdict : "challenge";
+
+      var verdictSpan = document.createElement("span");
+      verdictSpan.className = "row-verdict " + verdictClass;
+      verdictSpan.textContent = ev.verdict === "block"
+        ? t("popup_verdict_block", "Bloccato")
+        : t("popup_verdict_challenge", "Sospetto");
+      li.appendChild(verdictSpan);
+
+      var originEl = document.createElement("strong");
+      originEl.textContent = origin;
+      li.appendChild(originEl);
+
       if (ev.pattern) {
-        var pSpan = li.querySelector("span.mono");
-        if (pSpan) pSpan.textContent = "[" + ev.pattern + "]";
+        li.appendChild(document.createTextNode(" "));
+        var patternSpan = document.createElement("span");
+        patternSpan.className = "mono";
+        patternSpan.textContent = "[" + ev.pattern + "]";
+        li.appendChild(patternSpan);
       }
+
+      var metaDiv = document.createElement("div");
+      metaDiv.className = "row-meta mono";
+      metaDiv.textContent = when + "  ·  " + (ev.signals || []).join(", ");
+      li.appendChild(metaDiv);
+
       if (ev.explanationUser) {
-        li.querySelectorAll("div")[1].textContent = ev.explanationUser;
+        var explDiv = document.createElement("div");
+        explDiv.textContent = ev.explanationUser;
+        li.appendChild(explDiv);
       }
+
       historyList.appendChild(li);
     });
   }
@@ -225,9 +238,22 @@
   saveBtn.addEventListener("click", async function () {
     var mode = "local";
     modeInputs.forEach(function (r) { if (r.checked) mode = r.value; });
-    var url = String(backendUrlEl.value || "").trim();
-    // Normalizza URL: rimuove trailing slash
-    url = url.replace(/\/+$/, "");
+    var url = String(backendUrlEl.value || "").trim().replace(/\/+$/, "");
+    // Rifiuta schemi diversi da http/https (file:, javascript:, data:, ...)
+    if (url) {
+      try {
+        var parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          testResult.className = "test-result fail";
+          testResult.textContent = t("settings_test_fail", "Non raggiungibile") + " — schema non valido";
+          return;
+        }
+      } catch (_) {
+        testResult.className = "test-result fail";
+        testResult.textContent = t("settings_test_fail", "Non raggiungibile") + " — URL non valido";
+        return;
+      }
+    }
     var netrules = !!netrulesEl.checked;
 
     await BitMSettings.set({ mode: mode, backendUrl: url, blockNetRulesEnabled: netrules });

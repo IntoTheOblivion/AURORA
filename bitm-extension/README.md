@@ -101,3 +101,24 @@ node tests/manual_playwright.js 1         # solo scenario N
 Gli scenari 2 e 4 richiedono interazione manuale nel popup (configurare mode +
 toggle). Playwright apre il browser in non-headless e attende 15-30s per
 permettere la configurazione.
+
+### Test E2E automatico (hybrid mode)
+
+`tests/e2e_hybrid.js` valida end-to-end l'integrazione con il backend v7.4
+**senza interazione manuale**: seed della traiettoria via POST diretti, pre-seed
+di `chrome.storage.local` via `serviceWorker.evaluate`, verifica finale su 3
+canali indipendenti (backend sessions, SW state, banner nel DOM).
+
+```bash
+# shell 1: backend in stub mode (deterministico)
+cd bitm-plugin
+LLM_BACKEND=stub LLM_TRAJECTORY_ANALYSIS=on python run.py
+
+# shell 2: test
+cd bitm-extension
+node tests/e2e_hybrid.js
+# atteso: 3× "✓ assert N" e "EXIT 0 — hybrid e2e OK"
+```
+
+Con `LLM_BACKEND=ollama|anthropic` il test degrada a "accetto qualsiasi pattern
+non vuoto" invece del match esatto `panic_password_change`.

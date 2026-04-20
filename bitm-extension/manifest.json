@@ -41,7 +41,7 @@
     "rule_resources": [
       {
         "id": "bitm_static",
-        "enabled": false,
+        "enabled": true,
         "path": "src/net-rules.json"
       }
     ]

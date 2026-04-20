@@ -18,16 +18,92 @@
   var bannerShown = false;
   var cachedSettings = { mode: "local", backendUrl: "", sessionId: "" };
 
-  // Carica i settings una volta all'avvio; se cambiano (popup) li aggiorniamo
+  // Carica i settings una volta all'avvio; fino a quando la prima get() non
+  // risolve, i messaggi da page-hook attendono (altrimenti il primo detect
+  // partirebbe con cachedSettings default e salterebbe l'hybrid path anche
+  // quando l'utente ha configurato mode=hybrid).
+  var settingsReady = Promise.resolve();
   try {
     if (self.BitMSettings) {
-      self.BitMSettings.get().then(function (s) { cachedSettings = s; });
+      settingsReady = self.BitMSettings.get().then(function (s) { cachedSettings = s; })
+        .catch(function () { /* fallback default già impostato */ });
       self.BitMSettings.subscribe(function (s) { cachedSettings = s; });
     }
   } catch (_) { /* noop */ }
 
   function pathOf(url) {
     try { return new URL(url).pathname || "/"; } catch (_) { return "/"; }
+  }
+
+  // ── Fingerprint raccolto in ISOLATED world (non esposto alla pagina) ──────
+  function canvasFingerprint() {
+    try {
+      var c = document.createElement("canvas");
+      c.width = 120; c.height = 32;
+      var ctx = c.getContext("2d");
+      ctx.textBaseline = "top";
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#069";
+      ctx.fillText("BitMShield", 2, 2);
+      ctx.fillStyle = "rgba(128,128,64,.8)";
+      ctx.fillRect(60, 4, 20, 14);
+      return c.toDataURL().slice(0, 80);
+    } catch (_) { return ""; }
+  }
+  function webglRenderer() {
+    try {
+      var c = document.createElement("canvas");
+      var gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+      if (!gl) return "";
+      var ext = gl.getExtension("WEBGL_debug_renderer_info");
+      if (!ext) return String(gl.getParameter(gl.RENDERER) || "");
+      return String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "");
+    } catch (_) { return ""; }
+  }
+  function pluginNames() {
+    try {
+      var out = [];
+      var ps = navigator.plugins || [];
+      for (var i = 0; i < ps.length; i++) {
+        if (ps[i] && ps[i].name) out.push(String(ps[i].name));
+      }
+      return out;
+    } catch (_) { return []; }
+  }
+  function languages() {
+    try {
+      if (navigator.languages && navigator.languages.length)
+        return Array.prototype.slice.call(navigator.languages).map(String);
+      if (navigator.language) return [String(navigator.language)];
+      return [];
+    } catch (_) { return []; }
+  }
+  function timezone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
+    catch (_) { return ""; }
+  }
+  function screenRes() {
+    try {
+      return (screen && screen.width && screen.height)
+        ? (screen.width + "x" + screen.height) : "";
+    } catch (_) { return ""; }
+  }
+  function colorDepth() {
+    try { return (screen && screen.colorDepth) || 24; } catch (_) { return 24; }
+  }
+  function enrichFingerprint(data) {
+    // Parte da quanto arrivato da page-hook + aggiunge i campi sensibili
+    // raccolti qui in ISOLATED world (invisibili alla pagina).
+    return Object.assign({}, data, {
+      platform: navigator.platform || "",
+      plugins: pluginNames(),
+      webgl: webglRenderer(),
+      canvas: canvasFingerprint(),
+      languages: languages(),
+      timezone: timezone(),
+      screenRes: screenRes(),
+      colorDepth: colorDepth(),
+    });
   }
 
   async function computeAndReport(data) {
@@ -51,7 +127,7 @@
           score: local.score,
           signals: local.signals,
           critical: critical,
-          fingerprint: data,
+          fingerprint: enrichFingerprint(data),
           trajectory: traj,
         });
         if (merged && merged.verdict) {
@@ -116,7 +192,7 @@
     if (e.source !== window) return;
     var d = e.data;
     if (!d || d.source !== "bitm-hook" || !d.data) return;
-    computeAndReport(d.data);
+    settingsReady.then(function () { computeAndReport(d.data); });
   });
 
   // Re-probe dopo 2s (WebSocket possono aprirsi post-load)
