@@ -58,8 +58,8 @@ CRITICAL_BLOCK = frozenset({
 _AMPLIFIER_WEIGHTS: dict[str, float] = {
     "vpn_detected":          0.16,   # VPN su pagina sensibile → challenge quasi certo
     "swiftshader_webgl":     0.10,
-    "zero_plugins":          0.09,
-    "no_webgl_renderer":     0.08,
+    "zero_plugins":          0.03,  # Chrome moderno ha sempre 0 plugin
+    "no_webgl_renderer":     0.05,  # GPU disabilitata può essere legittima
     "empty_canvas":          0.07,
     "no_languages":          0.08,
     "no_timezone":           0.06,

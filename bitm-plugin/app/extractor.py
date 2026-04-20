@@ -38,8 +38,15 @@ _TUNNEL_HOST_RE = re.compile(
 # Marker nel document.title: i due client BitM più diffusi lasciano il proprio
 # nome nel titolo quando non personalizzati (noVNC: "<sito> - noVNC";
 # Guacamole: contiene "Apache Guacamole").
+# NOTA: il check titolo viene saltato se la pagina è un motore di ricerca —
+# altrimenti "noVNC - Ricerca Google" o "guacamole recipe" triggererebbe il marker.
 _NOVNC_TITLE_RE     = re.compile(r"\b(?:noVNC|Websockify|WebSockify)\b", re.IGNORECASE)
 _GUACAMOLE_TITLE_RE = re.compile(r"\bguacamole\b", re.IGNORECASE)
+_SEARCH_ENGINE_RE   = re.compile(
+    r"\b(?:Google|Bing|DuckDuckGo|Yahoo|Yandex|Baidu|Ecosia|Wikipedia|Reddit)\b"
+    r"|\bSearch\b|\bRicerca\b|\bBúsqueda\b|\bSuche\b|\bRecherche\b",
+    re.IGNORECASE,
+)
 
 # xURL di BitM+: il payload XSS viene iniettato come query-string del RP
 # (es.  "?xssParam={loadFromAttacker(/xss/payload.js)}" in Catalano 2025).
@@ -227,9 +234,12 @@ def _detect_bitm(raw: dict, ua_lower: str) -> list[str]:
 
     # noVNC e Guacamole lasciano il loro nome nel document.title se non
     # stato rimosso dall'attaccante (Tzschoppe 2023 §4.1–4.2).
-    if title and _NOVNC_TITLE_RE.search(title):
+    # Salta il check se il titolo appartiene a una pagina di ricerca o
+    # contenuto editoriale (es. "noVNC - Ricerca Google", "guacamole recipe").
+    title_is_search = bool(title and _SEARCH_ENGINE_RE.search(title))
+    if title and not title_is_search and _NOVNC_TITLE_RE.search(title):
         signals.append("novnc_client_marker")
-    if title and _GUACAMOLE_TITLE_RE.search(title):
+    if title and not title_is_search and _GUACAMOLE_TITLE_RE.search(title):
         signals.append("guacamole_client_marker")
 
     # xURL con payload XSS riflesso (Catalano 2025 Fig. 11): firma tipica
@@ -295,8 +305,8 @@ def _pre_score(raw: dict, headless_signals: list, bitm_signals: list,
         "phantomjs_ua":      0.55,
         "webdriver_true":    0.45,
         "swiftshader_webgl": 0.30,
-        "no_webgl_renderer": 0.20,
-        "zero_plugins":      0.20,
+        "no_webgl_renderer": 0.12,  # GPU disabilitata può essere legittima
+        "zero_plugins":      0.07,  # Chrome moderno ha sempre 0 plugin
         "empty_canvas":      0.15,
         "no_languages":      0.15,
         "no_timezone":       0.10,
@@ -352,7 +362,8 @@ def _pre_score(raw: dict, headless_signals: list, bitm_signals: list,
 def _timezone_anomaly(raw: dict) -> bool:
     tz = raw.get("timezone", "") or ""
     langs = raw.get("languages") or []
-    if tz in ("UTC", "Etc/UTC", "") and langs:
+    # Solo UTC esplicito — timezone vuota è già coperta da no_timezone
+    if tz in ("UTC", "Etc/UTC") and langs:
         first = langs[0].lower() if langs else ""
         if not first.startswith("en"):
             return True
