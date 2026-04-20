@@ -56,7 +56,7 @@ _BITM_UA_MARKERS = ("novnc", "websockify", "guacamole", "tigervnc")
 # Porte di ascolto del BE BitM+ (3081=MalSrv Express, 6080=noVNC, 5900=VNC,
 # 4822=Guacamole Tomcat). Se compaiono nell'URL visto dal client è
 # altamente sospetto.
-_BITM_PORT_RE = re.compile(r":(?:3081|6080|5900|4822|8080)(?:/|$)")
+_BITM_PORT_RE = re.compile(r":(?:3081|6080|5900|4822)(?:/|$)")
 
 
 def extract_features(raw: dict, ip: str, store: dict,
@@ -268,7 +268,7 @@ def _detect_bitm(raw: dict, ua_lower: str) -> list[str]:
     # viewport per mostrare la GUI del BitM sopra il RP. Molti iframe full
     # sono anomali nelle pagine d'autenticazione reali.
     try:
-        if int(iframe_n) >= 3:
+        if int(iframe_n) >= 5:
             signals.append("iframe_overlay")
     except (TypeError, ValueError):
         pass
@@ -322,14 +322,14 @@ def _pre_score(raw: dict, headless_signals: list, bitm_signals: list,
             score += w
             confirmed.append(sig)
 
-    # Latenza (>300ms supera sicuramente soglia CHALLENGE su payment=0.20)
-    if avg_timing > 500:
+    # Latenza (soglie alzate: event loop JS-heavy come YouTube può superare 500ms)
+    if avg_timing > 2000:
         score += 0.32
         confirmed.append(f"extreme_latency_{int(avg_timing)}ms")
-    elif avg_timing > 300:
+    elif avg_timing > 1000:
         score += 0.22
         confirmed.append(f"high_latency_{int(avg_timing)}ms")
-    elif avg_timing > 150:
+    elif avg_timing > 500:
         score += 0.09
         confirmed.append(f"elevated_latency_{int(avg_timing)}ms")
 

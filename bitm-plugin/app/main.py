@@ -254,13 +254,17 @@ def _fast_rules(features: dict) -> list[str]:
     if features.get("webdriver") is True:
         signals.append("webdriver_flag")
 
-    no_plugins = features.get("plugin_count", 1) == 0
-    no_webgl   = features.get("webgl") in ("unavailable", "", None)
-    is_mobile  = features.get("is_mobile", False)
-    if no_plugins and no_webgl and not is_mobile:
+    no_plugins  = features.get("plugin_count", 1) == 0
+    no_webgl    = features.get("webgl") in ("unavailable", "", None)
+    is_mobile   = features.get("is_mobile", False)
+    no_canvas   = features.get("canvas_empty", False)
+    no_languages = features.get("language_count", 1) == 0
+    # Richiede 3 segnali: browser moderni hanno legittimamente 0 plugin,
+    # serve almeno un'altra anomalia hard (canvas vuoto o lingue assenti).
+    if no_plugins and no_webgl and (no_canvas or no_languages) and not is_mobile:
         signals.append("no_plugins_no_webgl")
 
-    if features.get("avg_timing_ms", 0) > 600:
+    if features.get("avg_timing_ms", 0) > 2000:
         signals.append("extreme_latency")
 
     if (features.get("ip_meta") or {}).get("is_tor"):
