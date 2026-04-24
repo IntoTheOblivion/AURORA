@@ -12,16 +12,21 @@ Novità v6.2:
 """
 
 import asyncio
+import hashlib
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import (
+    ADMIN_TOKEN,
     LLM_BACKEND,
     LLM_TRAJECTORY_ANALYSIS,
+    check_admin_token,
+    is_trusted_proxy,
     summary as config_summary,
     validate as config_validate,
 )
@@ -34,15 +39,6 @@ from app.geoip import resolve as geoip_resolve, summary as geoip_summary
 from app.broadcaster import get_broadcaster
 from app.notifier import notify_block, webhook_status
 
-app = FastAPI(title="BitM Detection Plugin", version="7.4.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 STATIC_DIR  = Path(__file__).parent / "static"
 RATE_LIMIT  = 30
 RATE_WINDOW = 60
@@ -52,25 +48,8 @@ _store       = get_store()
 _broadcaster = get_broadcaster()
 
 
-# ── Middleware: GeoIP enrichment ──────────────────────────────────────────────
-
-@app.middleware("http")
-async def enrich_geoip(request: Request, call_next):
-    """
-    Arricchisce ogni Request con `request.state.ip` e `request.state.ip_meta`
-    (country, asn, isp, is_tor, is_vpn) risolti automaticamente dal GeoIP.
-    """
-    ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-          or (request.client.host if request.client else "unknown"))
-    request.state.ip      = ip
-    request.state.ip_meta = geoip_resolve(ip)
-    return await call_next(request)
-
-
-# ── Startup / Shutdown ────────────────────────────────────────────────────────
-
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     errors = config_validate()
     if errors:
         for e in errors:
@@ -79,11 +58,59 @@ async def startup():
     await _store.connect()
     print(f"[bitm] Session store: {_store.backend}")
     print(f"[bitm] GeoIP: {geoip_summary()}")
+    if not ADMIN_TOKEN:
+        print("[bitm] ⚠ ADMIN_TOKEN non impostato: endpoint admin/dashboard "
+              "/ws/events accessibili senza autenticazione")
+    try:
+        yield
+    finally:
+        await _store.close()
 
 
-@app.on_event("shutdown")
-async def shutdown():
-    await _store.close()
+app = FastAPI(title="BitM Detection Plugin", version="7.4.2", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── Auth helpers ─────────────────────────────────────────────────────────────
+
+def require_admin(request: Request) -> None:
+    """Dependency FastAPI: 401 se ADMIN_TOKEN è impostato e mancante/errato."""
+    token = request.headers.get("X-Admin-Token") or request.query_params.get("token")
+    if not check_admin_token(token):
+        raise HTTPException(status_code=401, detail="Admin token richiesto")
+
+
+# ── Middleware: GeoIP enrichment ──────────────────────────────────────────────
+
+@app.middleware("http")
+async def enrich_geoip(request: Request, call_next):
+    """
+    Arricchisce ogni Request con `request.state.ip` e `request.state.ip_meta`
+    (country, asn, isp, is_tor, is_vpn) risolti automaticamente dal GeoIP.
+
+    X-Forwarded-For viene letto SOLO se il peer diretto è in TRUSTED_PROXIES.
+    Altrimenti si usa request.client.host, per evitare che un attaccante possa
+    ruotare IP via header spoofing e aggirare rate-limit / IP-block.
+    """
+    peer = request.client.host if request.client else ""
+    ip = peer or "unknown"
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff and is_trusted_proxy(peer):
+        # Il proxy appende il client in coda; prendiamo l'ultimo non-trusted
+        # da destra verso sinistra per evitare header manipolati dal client.
+        for candidate in reversed([p.strip() for p in xff.split(",") if p.strip()]):
+            if not is_trusted_proxy(candidate):
+                ip = candidate
+                break
+    request.state.ip      = ip
+    request.state.ip_meta = geoip_resolve(ip)
+    return await call_next(request)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -116,7 +143,7 @@ async def collector():
 async def health():
     return {
         "status":              "ok",
-        "version":             "7.4.0",
+        "version":             "7.4.2",
         "backend":             LLM_BACKEND,
         "model":               get_selected_model(),
         "trajectory_analysis": LLM_TRAJECTORY_ANALYSIS,
@@ -160,8 +187,23 @@ async def collect(request: Request, body: dict):
         return _resp("block", 1.0, "ATTACK", ["ip_previously_blocked"],
                      "IP precedentemente bloccato", "default", 0)
 
-    # Sessione (persistente su Redis)
-    sid   = (body.get("sessionId") or "").strip() or ip
+    # Sessione (persistente su Redis).
+    # Se il client non fornisce sessionId, ricadiamo su un hash di ip +
+    # fingerprint (UA + canvas + languages): due client diversi dietro lo
+    # stesso NAT hanno fingerprint diversi, quindi non condividono la
+    # sessione e i relativi block_count. Collector v7.x fornisce sempre
+    # un sessionId, questo è solo il fallback.
+    sid_raw = (body.get("sessionId") or "").strip()
+    if sid_raw:
+        sid = sid_raw
+    else:
+        fp = "|".join([
+            ip,
+            (body.get("userAgent") or "")[:200],
+            (body.get("canvas") or "")[:200],
+            ",".join(body.get("languages") or [])[:80],
+        ])
+        sid = "anon-" + hashlib.sha1(fp.encode("utf-8")).hexdigest()[:16]
     store = await _store.get_session(sid)
     if store is None:
         store = {
@@ -264,7 +306,9 @@ def _fast_rules(features: dict) -> list[str]:
     if no_plugins and no_webgl and (no_canvas or no_languages) and not is_mobile:
         signals.append("no_plugins_no_webgl")
 
-    if features.get("avg_timing_ms", 0) > 2000:
+    # Soglia allineata con extractor._pre_score: >600ms è considerato scraping/bot.
+    # Label identica a CRITICAL_BLOCK per lo short-circuit deterministico.
+    if features.get("avg_timing_ms", 0) > 600:
         signals.append("extreme_latency")
 
     if (features.get("ip_meta") or {}).get("is_tor"):
@@ -299,10 +343,11 @@ def _resp(action: str, score: float, verdict: str, indicators: list,
     }
     if trajectory:
         pattern = trajectory.get("pattern") or ""
-        # Non-payload patterns: disabled / bypassed / insufficient_history → omessi
-        # per restare backward-compatible con client v7.3.
+        # Non-payload patterns: disabled / bypassed / insufficient_history /
+        # normal_flow → omessi per restare backward-compatible con client v7.3
+        # e non inviare rumore sul pattern "tutto normale".
         if pattern and pattern not in ("disabled", "bypassed_fast_rules",
-                                       "insufficient_history"):
+                                       "insufficient_history", "normal_flow"):
             payload["trajectory_pattern"] = pattern
             payload["trajectory_score"]   = round(
                 float(trajectory.get("trajectory_score") or 0.0), 3)
@@ -317,7 +362,7 @@ def _resp(action: str, score: float, verdict: str, indicators: list,
 
 # ── Admin endpoints ───────────────────────────────────────────────────────────
 
-@app.get("/api/bitm/sessions")
+@app.get("/api/bitm/sessions", dependencies=[Depends(require_admin)])
 async def sessions_info():
     recent = await _store.recent_sessions(limit=20)
     return {
@@ -336,7 +381,7 @@ async def sessions_info():
     }
 
 
-@app.delete("/api/bitm/sessions")
+@app.delete("/api/bitm/sessions", dependencies=[Depends(require_admin)])
 async def clear():
     await _store.clear_sessions()
     await _store.clear_blocked()
@@ -346,7 +391,8 @@ async def clear():
 
 # ── Dashboard real-time (v6.1) ────────────────────────────────────────────────
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard", response_class=HTMLResponse,
+         dependencies=[Depends(require_admin)])
 async def dashboard():
     p = STATIC_DIR / "dashboard.html"
     if not p.exists():
@@ -357,6 +403,13 @@ async def dashboard():
 @app.websocket("/ws/events")
 async def ws_events(ws: WebSocket):
     """Feed real-time degli eventi /api/bitm/collect."""
+    # Auth: se ADMIN_TOKEN è impostato, richiede ?token= o header X-Admin-Token
+    # (il browser non può settare header custom sull'handshake WS, quindi la
+    # query è il fallback primario per la dashboard).
+    token = ws.query_params.get("token") or ws.headers.get("x-admin-token")
+    if not check_admin_token(token):
+        await ws.close(code=1008)  # policy violation
+        return
     await _broadcaster.connect(ws)
     try:
         while True:

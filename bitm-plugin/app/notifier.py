@@ -349,7 +349,30 @@ async def _post_with_retry(
 
 # ── API pubblica ───────────────────────────────────────────────────────────────
 
-_cfg: WebhookConfig | None = _load_config()
+# Config caricata lazy al primo uso: leggendola a import-time non si
+# recepivano cambi di env var fatti dopo l'import (tipico nei test).
+_cfg: WebhookConfig | None = None
+_cfg_loaded: bool = False
+
+# Strong ref set: Python può GC'are i task creati con create_task se non c'è
+# un riferimento vivo (docs: "save a reference [...] to avoid a task
+# disappearing mid-execution"). Li teniamo qui e li rimuoviamo a done.
+_pending_tasks: set[asyncio.Task] = set()
+
+
+def _get_cfg() -> WebhookConfig | None:
+    global _cfg, _cfg_loaded
+    if not _cfg_loaded:
+        _cfg = _load_config()
+        _cfg_loaded = True
+    return _cfg
+
+
+def reload_config() -> None:
+    """Forza la rilettura della config (utile nei test)."""
+    global _cfg, _cfg_loaded
+    _cfg = None
+    _cfg_loaded = False
 
 
 def notify_block(event: dict[str, Any]) -> None:
@@ -362,32 +385,36 @@ def notify_block(event: dict[str, Any]) -> None:
     Chiamare da qualsiasi contesto async senza await:
         notify_block(entry)
     """
-    if _cfg is None:
+    cfg = _get_cfg()
+    if cfg is None:
         return
 
     action = event.get("action", "")
     if action != "block":
         return
 
-    payload  = build_payload(event, _cfg.kind)
+    payload  = build_payload(event, cfg.kind)
     event_ts = event.get("ts", "?")
 
-    asyncio.create_task(
-        _post_with_retry(_cfg, payload, event_ts),
+    task = asyncio.create_task(
+        _post_with_retry(cfg, payload, event_ts),
         name=f"webhook-block-{event_ts}",
     )
+    _pending_tasks.add(task)
+    task.add_done_callback(_pending_tasks.discard)
 
 
 def webhook_status() -> dict[str, Any]:
     """
     Restituisce lo stato corrente del webhook (usato da /health).
     """
-    if _cfg is None:
+    cfg = _get_cfg()
+    if cfg is None:
         return {"enabled": False}
     return {
         "enabled": True,
-        "type":    _cfg.kind,
-        "url":     _cfg.url[:40] + "..." if len(_cfg.url) > 40 else _cfg.url,
-        "timeout": _cfg.timeout,
-        "retries": _cfg.retries,
+        "type":    cfg.kind,
+        "url":     cfg.url[:40] + "..." if len(cfg.url) > 40 else cfg.url,
+        "timeout": cfg.timeout,
+        "retries": cfg.retries,
     }

@@ -811,6 +811,28 @@ async def analyze_trajectory(session_state: dict, features: dict) -> dict:
     if cached:
         return {**cached, "_from_cache": True}
 
+    # Short-circuit deterministico: se la traiettoria non contiene nessuno
+    # dei marker che gli analyzer cercano (login, change-password, /admin,
+    # navigazione rapida), non serve chiamare l'LLM — evitiamo un round-trip
+    # di ~1s su ogni sessione "noiosa" (homepage, catalogo, news, ecc.) e
+    # teniamo la latenza coerente con la cache del fingerprint-scorer.
+    pages_l = [str(p).lower() for p in pages]
+    has_login = any(any(tok in p for tok in _LOGIN_TOKENS) for p in pages_l)
+    has_change_pw = any(any(tok in p for tok in _CHANGE_PW_TOKENS) for p in pages_l)
+    has_admin = any(p.startswith("/admin") for p in pages_l)
+    first_seen = session_state.get("first_seen")
+    elapsed = (time.time() - float(first_seen)) if first_seen else float(len(pages))
+    has_rapid = len(pages) >= 5 and elapsed < 2.0
+
+    if not (has_login or has_change_pw or has_admin or has_rapid):
+        result = _traj_default(
+            pattern="normal_flow",
+            score=0.0,
+            admin=f"Nessun pattern sensibile in {len(pages)} pagine ({elapsed:.1f}s)",
+        )
+        _cache_set_traj(cache_key, result)
+        return result
+
     if LLM_BACKEND == "stub":
         result = _analyze_trajectory_stub(session_state, features)
     elif LLM_BACKEND == "ollama":

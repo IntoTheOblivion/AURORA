@@ -15,14 +15,56 @@ try {
   console.error("[BitM] importScripts failed", e);
 }
 
-// ── Stato in memoria ────────────────────────────────────────────────────────
-const state = new Map(); // tabId → verdict payload
+// ── Stato per-tab ───────────────────────────────────────────────────────────
+// In MV3 il service worker viene terminato dopo ~30s di idle: una Map pura
+// perderebbe lo stato ad ogni respawn (badge/popup vuoti alla prima query
+// successiva). Tenevamo solo `state = new Map()` e questo era il bug.
+// Ora la Map resta come cache in-memory, con shadow-write su
+// chrome.storage.session (persiste finché il browser è aperto) e lazy-load
+// su cache-miss.
+const state = new Map(); // tabId → verdict payload (cache)
 // Esposto su self per permettere test E2E (tests/e2e_hybrid.js) di leggere
 // lo stato via serviceWorker.evaluate. Non usato dal runtime dell'estensione.
 self.__bitmState = state;
+const SESSION_STATE_KEY = "bitm-tab-state";
 const HISTORY_KEY = "bitm-history";
 const HISTORY_MAX = 50;
 const RANK = { allow: 0, challenge: 1, block: 2 };
+
+async function loadStateFromSession() {
+  try {
+    const items = await chrome.storage.session.get([SESSION_STATE_KEY]);
+    const raw = items && items[SESSION_STATE_KEY];
+    if (raw && typeof raw === "object") {
+      for (const [tabId, payload] of Object.entries(raw)) {
+        // Le chiavi JSON sono sempre stringhe: riconverto a number.
+        const id = Number(tabId);
+        if (Number.isFinite(id)) state.set(id, payload);
+      }
+    }
+  } catch (_) { /* quota / disabled */ }
+}
+
+let persistChain = Promise.resolve();
+function persistStateToSession() {
+  // Serializziamo le scritture: multiple applyAndPersist() concorrenti non
+  // devono fare read-modify-write corrotti.
+  persistChain = persistChain.then(async () => {
+    try {
+      const obj = {};
+      for (const [tabId, payload] of state.entries()) obj[tabId] = payload;
+      await chrome.storage.session.set({ [SESSION_STATE_KEY]: obj });
+    } catch (_) { /* noop */ }
+  });
+  return persistChain;
+}
+
+async function getTabState(tabId) {
+  if (state.has(tabId)) return state.get(tabId);
+  // Cache miss dopo respawn SW: tenta di rileggere da storage.session.
+  await loadStateFromSession();
+  return state.get(tabId) || null;
+}
 
 const BADGE = {
   allow:     { text: "",  color: "#1e7f3c" },
@@ -48,13 +90,17 @@ function applyBadge(tabId, verdict) {
 // Accettiamo solo http/https: file:, chrome-extension:, javascript:, data:
 // non sono backend legittimi e data:/javascript: potrebbero essere usati per
 // smuggling se l'UI non filtrasse l'input.
+//
+// Normalizziamo all'ORIGIN: altrimenti un utente che incolla
+// "http://host/api" produrrebbe "http://host/api" + "/api/bitm/collect" =
+// "/api/api/bitm/collect" (doppio prefisso). Il path del backend è fisso.
 function safeBackendUrl(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
   try {
     const u = new URL(s);
     if (u.protocol !== "http:" && u.protocol !== "https:") return "";
-    return u.origin + u.pathname.replace(/\/$/, "");
+    return u.origin;
   } catch (_) { return ""; }
 }
 
@@ -108,6 +154,8 @@ async function reportToBackend(local, fingerprint, trajectory, settings) {
     const res = await fetch(url, {
       method: "POST",
       mode: "cors",
+      credentials: "omit",   // niente cookie cross-origin
+      cache: "no-store",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         sessionId: settings.sessionId,
@@ -119,7 +167,8 @@ async function reportToBackend(local, fingerprint, trajectory, settings) {
         languages: fingerprint.languages || [],
         timezone: fingerprint.timezone || "",
         screenRes: fingerprint.screenRes || "",
-        colorDepth: fingerprint.colorDepth || 24,
+        // `??`: preserva colorDepth=0 (anomalia) invece di mascherarla a 24.
+        colorDepth: fingerprint.colorDepth ?? 24,
         canvas: fingerprint.canvas || "",
         webgl: fingerprint.webgl || "",
         pageUrl: fingerprint.pageUrl || "",
@@ -127,8 +176,8 @@ async function reportToBackend(local, fingerprint, trajectory, settings) {
         title: fingerprint.title || "",
         wsEndpoints: fingerprint.wsEndpoints || [],
         credentialsGetNative: fingerprint.credentialsGetNative !== false,
-        iframeCount: fingerprint.iframeCount || 0,
-        timing: fingerprint.timing || 0,
+        iframeCount: fingerprint.iframeCount ?? 0,
+        timing: fingerprint.timing ?? 0,
       }),
       signal: controller.signal,
     });
@@ -179,8 +228,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "bitm-popup-query") {
-    sendResponse(state.get(msg.tabId) || null);
-    return false;
+    // Async: potremmo dover leggere da storage.session se il SW è appena
+    // stato respawnato e la Map è fredda.
+    (async () => {
+      try {
+        sendResponse(await getTabState(msg.tabId));
+      } catch (_) {
+        sendResponse(null);
+      }
+    })();
+    return true;
   }
 
   if (msg.type === "bitm-popup-test-connection") {
@@ -191,7 +248,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const url = base + "/health";
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 2500);
-        const r = await fetch(url, { signal: controller.signal });
+        const r = await fetch(url, {
+          signal: controller.signal,
+          credentials: "omit",
+          cache: "no-store",
+        });
         clearTimeout(t);
         if (!r.ok) { sendResponse({ ok: false, status: r.status }); return; }
         const body = await r.json();
@@ -241,6 +302,8 @@ async function applyAndPersist(tabId, url, payload) {
   if (typeof tabId === "number") {
     state.set(tabId, payload);
     applyBadge(tabId, payload.verdict);
+    // Mirror su chrome.storage.session per sopravvivere al respawn del SW.
+    persistStateToSession();
   }
   // Scrivi in history solo verdict non-allow: evita di saturare lo storage
   // con navigazioni normali. La sezione history del popup è per incidenti.
@@ -259,18 +322,24 @@ async function applyAndPersist(tabId, url, payload) {
   }
 }
 
-chrome.tabs.onRemoved.addListener((tabId) => state.delete(tabId));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  state.delete(tabId);
+  persistStateToSession();
+});
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading" && changeInfo.url) {
     state.delete(tabId);
     applyBadge(tabId, "allow");
+    persistStateToSession();
   }
 });
 
-// ── Init: crea sessionId se assente e ripristina net-rules dopo restart SW ─
+// ── Init: crea sessionId se assente, ripristina net-rules e lo stato per-tab
+//    dopo un respawn del service worker.
 (async () => {
   try {
+    await loadStateFromSession();
     const s = await BitMSettings.ensureSessionId();
     if (s.blockNetRulesEnabled) await BitMNetRules.enable();
     else                         await BitMNetRules.disable();

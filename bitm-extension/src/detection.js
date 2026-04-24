@@ -11,9 +11,15 @@
   var TUNNEL_HOST_RE = /(?:^|[./@])([a-z0-9-]+\.(?:ngrok(?:-free)?\.(?:io|app|dev)|trycloudflare\.com|loca\.lt|localtunnel\.me|serveo\.net))/i;
   var NOVNC_TITLE_RE = /\b(?:noVNC|Websockify)\b/i;
   var GUACAMOLE_TITLE_RE = /\bguacamole\b/i;
+  // Filtro per escludere i titoli di pagine di ricerca/editoriali (es.
+  // "noVNC - Ricerca Google", "guacamole recipe"). Allineato con
+  // extractor._SEARCH_ENGINE_RE.
+  var SEARCH_ENGINE_RE = /\b(?:Google|Bing|DuckDuckGo|Yahoo|Yandex|Baidu|Ecosia|Wikipedia|Reddit)\b|\bSearch\b|\bRicerca\b|\bBúsqueda\b|\bSuche\b|\bRecherche\b/i;
   var XSS_PAYLOAD_RE = /(?:<\s*script|onerror\s*=|javascript:|document\.createElement|appendChild|loadFromAttacker|eval\s*\(|fromCharCode)/i;
   var BITM_UA_MARKERS = ["novnc", "websockify", "guacamole", "tigervnc"];
-  var BITM_PORT_RE = /:(?:3081|6080|5900|4822|8080)(?:\/|$)/;
+  // Porte del backend BitM/BitM+: 3081 (Express MalSrv), 6080 (noVNC),
+  // 5900 (VNC), 4822 (Guacamole Tomcat). Allineato con extractor._BITM_PORT_RE.
+  var BITM_PORT_RE = /:(?:3081|6080|5900|4822)(?:\/|$)/;
 
   // Pesi da extractor._pre_score (devono restare sincronizzati)
   var WEIGHTS = {
@@ -51,8 +57,11 @@
       found.tunnel_host = true;
     if (BITM_PORT_RE.test(pageUrl) || BITM_PORT_RE.test(referrer))
       found.bitm_backend_port = true;
-    if (NOVNC_TITLE_RE.test(title))     found.novnc_client_marker = true;
-    if (GUACAMOLE_TITLE_RE.test(title)) found.guacamole_client_marker = true;
+    // Salta i marker via title se il titolo sembra una pagina di ricerca
+    // (evita falsi positivi su "noVNC - Ricerca Google", "guacamole recipe").
+    var titleIsSearch = !!(title && SEARCH_ENGINE_RE.test(title));
+    if (title && !titleIsSearch && NOVNC_TITLE_RE.test(title))     found.novnc_client_marker = true;
+    if (title && !titleIsSearch && GUACAMOLE_TITLE_RE.test(title)) found.guacamole_client_marker = true;
     if (XSS_PAYLOAD_RE.test(pageUrl) || XSS_PAYLOAD_RE.test(referrer))
       found.xss_reflected_param = true;
 
@@ -82,7 +91,8 @@
       }
     }
 
-    if (iframes >= 3) found.iframe_overlay = true;
+    // Allineato con extractor._detect_bitm: soglia 5 iframe, non 3.
+    if (iframes >= 5) found.iframe_overlay = true;
 
     // Calcolo score + verdict
     var signals = Object.keys(found);

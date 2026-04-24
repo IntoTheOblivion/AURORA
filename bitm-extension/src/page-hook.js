@@ -19,8 +19,6 @@
   window.__bitmHookInstalled = true;
 
   var wsEndpoints = [];
-  var startedAt = (typeof performance !== "undefined" && performance.now)
-    ? performance.now() : Date.now();
 
   // ── WebSocket patch ────────────────────────────────────────────────────────
   try {
@@ -50,28 +48,34 @@
     }
   }
 
-  function snapshot(reason) {
-    var now = (typeof performance !== "undefined" && performance.now)
-      ? performance.now() : Date.now();
-    return {
-      reason: reason,
-      title: document.title || "",
-      pageUrl: location.href || "",
-      referrer: document.referrer || "",
-      userAgent: navigator.userAgent || "",
-      wsEndpoints: wsEndpoints.slice(),
-      credentialsGetNative: credentialsGetNative(),
-      iframeCount: (function () {
-        try { return document.getElementsByTagName("iframe").length; }
-        catch (_) { return 0; }
-      })(),
-      timing: Math.round(now - startedAt),
-    };
+  function snapshot(reason, cb) {
+    var t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    setTimeout(function () {
+      var t1 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      cb({
+        reason: reason,
+        title: document.title || "",
+        pageUrl: location.href || "",
+        referrer: document.referrer || "",
+        userAgent: navigator.userAgent || "",
+        wsEndpoints: wsEndpoints.slice(),
+        credentialsGetNative: credentialsGetNative(),
+        iframeCount: (function () {
+          try { return document.getElementsByTagName("iframe").length; }
+          catch (_) { return 0; }
+        })(),
+        timing: Math.round(t1 - t0),
+      });
+    }, 10);
   }
 
   function emit(reason) {
     try {
-      window.postMessage({ source: "bitm-hook", reason: reason, data: snapshot(reason) }, "*");
+      snapshot(reason, function (data) {
+        try {
+          window.postMessage({ source: "bitm-hook", reason: reason, data: data }, "*");
+        } catch (_) { /* noop */ }
+      });
     } catch (_) { /* noop */ }
   }
 

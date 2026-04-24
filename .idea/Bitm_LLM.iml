@@ -7,7 +7,7 @@
       <excludeFolder url="file://$MODULE_DIR$/bitm-plugin/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/bitm-plugin-v5-final/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="uv (Bitm_LLM)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.13 (Bitm_LLM) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
