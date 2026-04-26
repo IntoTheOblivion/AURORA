@@ -21,19 +21,29 @@
   var wsEndpoints = [];
 
   // ── WebSocket patch ────────────────────────────────────────────────────────
+  // Usiamo Proxy invece di sostituire il costruttore: il vecchio approccio
+  // (function wrapper + Patched.prototype = Native.prototype) rompeva
+  // `WebSocket.name`, le costanti statiche non-enumerabili (CONNECTING/OPEN/
+  // CLOSING/CLOSED venivano copiate solo se enumerabili) e `WebSocket.toString()`
+  // svelava il monkey-patch ad eventuali check anti-tamper della pagina.
+  // Proxy con un solo trap `construct` è trasparente a tutto il resto.
   try {
     var Native = window.WebSocket;
     if (Native && !Native.__bitmPatched) {
-      var Patched = function (url, protocols) {
-        try { wsEndpoints.push(String(url)); } catch (_) { /* noop */ }
-        return protocols !== undefined ? new Native(url, protocols) : new Native(url);
-      };
-      Patched.prototype = Native.prototype;
-      Patched.__bitmPatched = true;
-      for (var k in Native) {
-        try { Patched[k] = Native[k]; } catch (_) { /* noop */ }
-      }
-      window.WebSocket = Patched;
+      var Patched = new Proxy(Native, {
+        construct: function (target, args) {
+          try {
+            if (args && args.length > 0) wsEndpoints.push(String(args[0]));
+          } catch (_) { /* noop */ }
+          return Reflect.construct(target, args);
+        },
+      });
+      // Marker sul Native: idempotenza anche se un altro script applica
+      // un proxy successivamente (controllo del flag prima del wrap).
+      try {
+        Object.defineProperty(Native, "__bitmPatched", { value: true, configurable: false });
+      } catch (_) { Native.__bitmPatched = true; }
+      try { window.WebSocket = Patched; } catch (_) { /* readonly: rinuncia */ }
     }
   } catch (_) { /* noop */ }
 

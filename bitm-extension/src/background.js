@@ -108,13 +108,34 @@ function safeBackendUrl(raw) {
 // Serializziamo le scritture per evitare race read-modify-write quando più
 // tab concludono un verdict in rapida successione.
 let historyWriteChain = Promise.resolve();
+function _entryKey(e) {
+  // Stessa origin + stesso verdict + stessi segnali = stesso "incidente".
+  // Signals viene già da Array.from(new Set(...)) ma non è ordinato; lo
+  // ordiniamo qui per evitare miss di dedup dovuti all'ordine di arrivo.
+  const sigs = Array.isArray(e.signals) ? [...e.signals].sort().join(",") : "";
+  return (e.origin || "") + "|" + (e.verdict || "") + "|" + sigs;
+}
 function pushHistory(entry) {
   historyWriteChain = historyWriteChain.then(async () => {
     try {
       const items = await chrome.storage.local.get([HISTORY_KEY]);
       const list  = Array.isArray(items[HISTORY_KEY]) ? items[HISTORY_KEY] : [];
-      list.unshift(entry);
-      if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+      const head = list[0];
+      if (head && _entryKey(head) === _entryKey(entry)) {
+        // Stessa entry consecutiva (es. refresh ripetuti): bump count + at.
+        head.count = (head.count || 1) + 1;
+        head.at = entry.at || Date.now();
+        // Esplicitazione campi che possono essere arrivati arricchiti dal
+        // backend al secondo giro (es. explanation/pattern arrivati con il
+        // probe successivo): teniamo i valori non-vuoti più recenti.
+        if (entry.explanationUser) head.explanationUser = entry.explanationUser;
+        if (entry.pattern)         head.pattern         = entry.pattern;
+        if (entry.source)          head.source          = entry.source;
+      } else {
+        entry.count = 1;
+        list.unshift(entry);
+        if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+      }
       await chrome.storage.local.set({ [HISTORY_KEY]: list });
     } catch (_) { /* quota / disabled */ }
   });
@@ -133,6 +154,9 @@ function mergeVerdicts(local, remote) {
     verdict: worst,
     score: Math.max(local.score || 0, (remote && Number(remote.score)) || 0),
     signals: Array.from(new Set([...signalsLocal, ...signalsRemote])),
+    // `critical` arriva solo dal lato locale (segnali in CRITICAL_BLOCK). Il
+    // backend non lo ritorna esplicitamente: se era già critico, resta critico.
+    critical: !!local.critical,
     explanationUser: (remote && remote.explanation_user) || local.explanationUser || "",
     pattern: (remote && remote.trajectory_pattern) || "",
     source: "hybrid",
@@ -242,22 +266,51 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === "bitm-popup-test-connection") {
     (async () => {
+      const base = safeBackendUrl(msg.backendUrl);
+      if (!base) { sendResponse({ ok: false, error: "invalid_scheme" }); return; }
+      const url = base + "/health";
+      // 1) tentativo CORS standard: se risponde leggiamo /health e finiamo.
       try {
-        const base = safeBackendUrl(msg.backendUrl);
-        if (!base) { sendResponse({ ok: false, error: "invalid_scheme" }); return; }
-        const url = base + "/health";
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 2500);
+        const c1 = new AbortController();
+        const t1 = setTimeout(() => c1.abort(), 2500);
         const r = await fetch(url, {
-          signal: controller.signal,
+          signal: c1.signal,
           credentials: "omit",
           cache: "no-store",
         });
-        clearTimeout(t);
-        if (!r.ok) { sendResponse({ ok: false, status: r.status }); return; }
+        clearTimeout(t1);
+        if (!r.ok) { sendResponse({ ok: false, error: "http_status", status: r.status }); return; }
         const body = await r.json();
-        sendResponse({ ok: true, version: body.version, trajectory: !!body.trajectory_analysis, backend: body.backend });
-      } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+        sendResponse({
+          ok: true,
+          version: body.version,
+          trajectory: !!body.trajectory_analysis,
+          backend: body.backend,
+        });
+        return;
+      } catch (corsErr) {
+        // 2) Riprova in no-cors: una response opaca conferma che TCP+TLS+HTTP
+        //    funzionano e il backend rifiuta solo perché manca
+        //    `Access-Control-Allow-Origin: chrome-extension://...`. Distinguere
+        //    questo caso dall'irraggiungibilità è il bugfix: prima entrambi
+        //    cadevano nello stesso "Non raggiungibile" generico.
+        try {
+          const c2 = new AbortController();
+          const t2 = setTimeout(() => c2.abort(), 2000);
+          await fetch(url, {
+            signal: c2.signal,
+            mode: "no-cors",
+            credentials: "omit",
+            cache: "no-store",
+          });
+          clearTimeout(t2);
+          sendResponse({ ok: false, error: "cors_blocked", reachable: true });
+        } catch (_) {
+          // Se anche no-cors fallisce, il problema è davvero a livello rete:
+          // host inesistente, porta chiusa, TLS error, timeout.
+          sendResponse({ ok: false, error: "unreachable", detail: String(corsErr && corsErr.message || corsErr) });
+        }
+      }
     })();
     return true;
   }
@@ -289,6 +342,7 @@ async function handleVerdict(msg, sender) {
     verdict: worst,
     score: Math.max(prev ? prev.score : 0, msg.score || 0),
     signals: Array.from(new Set([...(prev ? prev.signals : []), ...(msg.signals || [])])),
+    critical: !!(msg.critical || (prev && prev.critical)),
     explanationUser: msg.explanationUser || (prev && prev.explanationUser) || "",
     pattern: msg.pattern || (prev && prev.pattern) || "",
     source: msg.source || "local",

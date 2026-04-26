@@ -42,6 +42,51 @@
     bitm_websocket_transport: 1,
   };
 
+  // Soglie [challenge, block] per contesto, allineate con policy.THRESHOLDS.
+  // Senza questa mappa il verdict locale era 0.65/0.28 ovunque, quindi una
+  // pagina /payment con score 0.55 (sopra block remoto) restava in challenge
+  // localmente — divergenza local vs hybrid.
+  var THRESHOLDS = {
+    "default": [0.40, 0.75],
+    "login":   [0.28, 0.62],
+    "payment": [0.20, 0.55],
+    "admin":   [0.22, 0.60],
+    "static":  [0.70, 0.92],
+  };
+
+  // Path prefix → contesto (porting di policy.detect_page_context)
+  var LOGIN_PREFIXES   = ["/login", "/signin", "/auth", "/accedi", "/logon", "/entrar"];
+  var PAYMENT_PREFIXES = ["/payment", "/checkout", "/pay", "/pagamento", "/ordine", "/order"];
+  var ADMIN_PREFIXES   = ["/admin", "/settings", "/account", "/profilo", "/profile", "/manage"];
+  var STATIC_EXTS      = [".js", ".css", ".png", ".jpg", ".jpeg", ".svg",
+                          ".ico", ".woff", ".woff2", ".ttf", ".map"];
+
+  function _matchPrefix(p, prefixes) {
+    for (var i = 0; i < prefixes.length; i++) {
+      var pr = prefixes[i];
+      if (p === pr || p.indexOf(pr + "/") === 0) return true;
+    }
+    return false;
+  }
+
+  function detectContext(pageUrl) {
+    var path = "/";
+    try {
+      // pageUrl può essere relativo o assente: fallback a location.href.
+      var base = (typeof location !== "undefined" && location.href) ? location.href : "http://x/";
+      path = new URL(pageUrl || base, base).pathname || "/";
+    } catch (_) { path = "/"; }
+    var p = path.toLowerCase().split("?")[0].split("#")[0];
+    if (_matchPrefix(p, LOGIN_PREFIXES))   return "login";
+    if (_matchPrefix(p, PAYMENT_PREFIXES)) return "payment";
+    if (_matchPrefix(p, ADMIN_PREFIXES))   return "admin";
+    for (var j = 0; j < STATIC_EXTS.length; j++) {
+      var ext = STATIC_EXTS[j];
+      if (p.length >= ext.length && p.lastIndexOf(ext) === p.length - ext.length) return "static";
+    }
+    return "default";
+  }
+
   function detect(input) {
     var title    = input.title || "";
     var pageUrl  = input.pageUrl || "";
@@ -105,14 +150,30 @@
       if (CRITICAL[signals[c]]) { hasCritical = true; break; }
     }
 
+    var context = detectContext(pageUrl);
+    var thresholds = THRESHOLDS[context] || THRESHOLDS["default"];
+    var thChallenge = thresholds[0];
+    var thBlock     = thresholds[1];
+
     var verdict;
-    if (hasCritical || score >= 0.65)      verdict = "block";
-    else if (score >= 0.28)                verdict = "challenge";
+    if (hasCritical || score >= thBlock)   verdict = "block";
+    else if (score >= thChallenge)         verdict = "challenge";
     else                                   verdict = "allow";
 
-    return { verdict: verdict, score: Math.round(score * 1000) / 1000, signals: signals };
+    return {
+      verdict: verdict,
+      score: Math.round(score * 1000) / 1000,
+      signals: signals,
+      context: context,
+    };
   }
 
   // Export per content-script (stessa realm ISOLATED)
-  self.BitMDetection = { detect: detect, WEIGHTS: WEIGHTS, CRITICAL: CRITICAL };
+  self.BitMDetection = {
+    detect: detect,
+    detectContext: detectContext,
+    WEIGHTS: WEIGHTS,
+    CRITICAL: CRITICAL,
+    THRESHOLDS: THRESHOLDS,
+  };
 })();
