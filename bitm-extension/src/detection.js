@@ -11,9 +11,15 @@
   var TUNNEL_HOST_RE = /(?:^|[./@])([a-z0-9-]+\.(?:ngrok(?:-free)?\.(?:io|app|dev)|trycloudflare\.com|loca\.lt|localtunnel\.me|serveo\.net))/i;
   var NOVNC_TITLE_RE = /\b(?:noVNC|Websockify)\b/i;
   var GUACAMOLE_TITLE_RE = /\bguacamole\b/i;
+  // Filtro per escludere i titoli di pagine di ricerca/editoriali (es.
+  // "noVNC - Ricerca Google", "guacamole recipe"). Allineato con
+  // extractor._SEARCH_ENGINE_RE.
+  var SEARCH_ENGINE_RE = /\b(?:Google|Bing|DuckDuckGo|Yahoo|Yandex|Baidu|Ecosia|Wikipedia|Reddit)\b|\bSearch\b|\bRicerca\b|\bBúsqueda\b|\bSuche\b|\bRecherche\b/i;
   var XSS_PAYLOAD_RE = /(?:<\s*script|onerror\s*=|javascript:|document\.createElement|appendChild|loadFromAttacker|eval\s*\(|fromCharCode)/i;
   var BITM_UA_MARKERS = ["novnc", "websockify", "guacamole", "tigervnc"];
-  var BITM_PORT_RE = /:(?:3081|6080|5900|4822|8080)(?:\/|$)/;
+  // Porte del backend BitM/BitM+: 3081 (Express MalSrv), 6080 (noVNC),
+  // 5900 (VNC), 4822 (Guacamole Tomcat). Allineato con extractor._BITM_PORT_RE.
+  var BITM_PORT_RE = /:(?:3081|6080|5900|4822)(?:\/|$)/;
 
   // Pesi da extractor._pre_score (devono restare sincronizzati)
   var WEIGHTS = {
@@ -36,6 +42,51 @@
     bitm_websocket_transport: 1,
   };
 
+  // Soglie [challenge, block] per contesto, allineate con policy.THRESHOLDS.
+  // Senza questa mappa il verdict locale era 0.65/0.28 ovunque, quindi una
+  // pagina /payment con score 0.55 (sopra block remoto) restava in challenge
+  // localmente — divergenza local vs hybrid.
+  var THRESHOLDS = {
+    "default": [0.40, 0.75],
+    "login":   [0.28, 0.62],
+    "payment": [0.20, 0.55],
+    "admin":   [0.22, 0.60],
+    "static":  [0.70, 0.92],
+  };
+
+  // Path prefix → contesto (porting di policy.detect_page_context)
+  var LOGIN_PREFIXES   = ["/login", "/signin", "/auth", "/accedi", "/logon", "/entrar"];
+  var PAYMENT_PREFIXES = ["/payment", "/checkout", "/pay", "/pagamento", "/ordine", "/order"];
+  var ADMIN_PREFIXES   = ["/admin", "/settings", "/account", "/profilo", "/profile", "/manage"];
+  var STATIC_EXTS      = [".js", ".css", ".png", ".jpg", ".jpeg", ".svg",
+                          ".ico", ".woff", ".woff2", ".ttf", ".map"];
+
+  function _matchPrefix(p, prefixes) {
+    for (var i = 0; i < prefixes.length; i++) {
+      var pr = prefixes[i];
+      if (p === pr || p.indexOf(pr + "/") === 0) return true;
+    }
+    return false;
+  }
+
+  function detectContext(pageUrl) {
+    var path = "/";
+    try {
+      // pageUrl può essere relativo o assente: fallback a location.href.
+      var base = (typeof location !== "undefined" && location.href) ? location.href : "http://x/";
+      path = new URL(pageUrl || base, base).pathname || "/";
+    } catch (_) { path = "/"; }
+    var p = path.toLowerCase().split("?")[0].split("#")[0];
+    if (_matchPrefix(p, LOGIN_PREFIXES))   return "login";
+    if (_matchPrefix(p, PAYMENT_PREFIXES)) return "payment";
+    if (_matchPrefix(p, ADMIN_PREFIXES))   return "admin";
+    for (var j = 0; j < STATIC_EXTS.length; j++) {
+      var ext = STATIC_EXTS[j];
+      if (p.length >= ext.length && p.lastIndexOf(ext) === p.length - ext.length) return "static";
+    }
+    return "default";
+  }
+
   function detect(input) {
     var title    = input.title || "";
     var pageUrl  = input.pageUrl || "";
@@ -51,8 +102,11 @@
       found.tunnel_host = true;
     if (BITM_PORT_RE.test(pageUrl) || BITM_PORT_RE.test(referrer))
       found.bitm_backend_port = true;
-    if (NOVNC_TITLE_RE.test(title))     found.novnc_client_marker = true;
-    if (GUACAMOLE_TITLE_RE.test(title)) found.guacamole_client_marker = true;
+    // Salta i marker via title se il titolo sembra una pagina di ricerca
+    // (evita falsi positivi su "noVNC - Ricerca Google", "guacamole recipe").
+    var titleIsSearch = !!(title && SEARCH_ENGINE_RE.test(title));
+    if (title && !titleIsSearch && NOVNC_TITLE_RE.test(title))     found.novnc_client_marker = true;
+    if (title && !titleIsSearch && GUACAMOLE_TITLE_RE.test(title)) found.guacamole_client_marker = true;
     if (XSS_PAYLOAD_RE.test(pageUrl) || XSS_PAYLOAD_RE.test(referrer))
       found.xss_reflected_param = true;
 
@@ -82,7 +136,8 @@
       }
     }
 
-    if (iframes >= 3) found.iframe_overlay = true;
+    // Allineato con extractor._detect_bitm: soglia 5 iframe, non 3.
+    if (iframes >= 5) found.iframe_overlay = true;
 
     // Calcolo score + verdict
     var signals = Object.keys(found);
@@ -95,14 +150,30 @@
       if (CRITICAL[signals[c]]) { hasCritical = true; break; }
     }
 
+    var context = detectContext(pageUrl);
+    var thresholds = THRESHOLDS[context] || THRESHOLDS["default"];
+    var thChallenge = thresholds[0];
+    var thBlock     = thresholds[1];
+
     var verdict;
-    if (hasCritical || score >= 0.65)      verdict = "block";
-    else if (score >= 0.28)                verdict = "challenge";
+    if (hasCritical || score >= thBlock)   verdict = "block";
+    else if (score >= thChallenge)         verdict = "challenge";
     else                                   verdict = "allow";
 
-    return { verdict: verdict, score: Math.round(score * 1000) / 1000, signals: signals };
+    return {
+      verdict: verdict,
+      score: Math.round(score * 1000) / 1000,
+      signals: signals,
+      context: context,
+    };
   }
 
   // Export per content-script (stessa realm ISOLATED)
-  self.BitMDetection = { detect: detect, WEIGHTS: WEIGHTS, CRITICAL: CRITICAL };
+  self.BitMDetection = {
+    detect: detect,
+    detectContext: detectContext,
+    WEIGHTS: WEIGHTS,
+    CRITICAL: CRITICAL,
+    THRESHOLDS: THRESHOLDS,
+  };
 })();

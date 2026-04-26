@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-18T23:38:09.759005",
+  "timestamp": "2026-04-24T23:44:20.225807",
   "version": "7.3",
   "passed": 49,
   "total": 49,
@@ -16,10 +16,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "default",
-      "plugin_ms": 0.2,
-      "total_ms": 3
+      "plugin_ms": 0.6,
+      "total_ms": 4
     },
     {
       "id": "T02",
@@ -32,7 +32,7 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "admin",
       "plugin_ms": 0.1,
       "total_ms": 2
@@ -48,10 +48,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "default",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1400.0,
+      "total_ms": 1402
     },
     {
       "id": "T04",
@@ -64,10 +64,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "default",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1288.6,
+      "total_ms": 1290
     },
     {
       "id": "T05",
@@ -80,10 +80,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "default",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1281.6,
+      "total_ms": 1284
     },
     {
       "id": "T06",
@@ -92,7 +92,7 @@
       "passed": true,
       "expected": "block",
       "got": "block",
-      "score": 0.97,
+      "score": 1.0,
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -112,7 +112,7 @@
       "passed": true,
       "expected": "block",
       "got": "block",
-      "score": 0.97,
+      "score": 1.0,
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -166,7 +166,7 @@
       "passed": true,
       "expected": "block",
       "got": "block",
-      "score": 0.97,
+      "score": 1.0,
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -177,7 +177,7 @@
       "reason": "Segnale critico: headless_ua, headlesschrome_ua, no_plugins_no_webgl",
       "context": "admin",
       "plugin_ms": 0.1,
-      "total_ms": 2
+      "total_ms": 3
     },
     {
       "id": "T11",
@@ -204,16 +204,16 @@
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
-      "score": 0.12,
+      "score": 0.28,
       "verdict": "LEGITIMATE",
-      "confidence": "high",
+      "confidence": "low",
       "indicators": [
         "vpn_detected"
       ],
-      "reason": "[ctx=login boost=0.16] stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "[ctx=login boost=0.16] VPN detected from US",
       "context": "login",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1656.9,
+      "total_ms": 1659
     },
     {
       "id": "T13",
@@ -222,16 +222,16 @@
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
-      "score": 0.22,
+      "score": 0.27,
       "verdict": "LEGITIMATE",
       "confidence": "high",
       "indicators": [
-        "high_latency_380ms"
+        "high_latency"
       ],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "[ctx=payment boost=0.12] High latency detected, browser appears to be legitimate.",
       "context": "payment",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1638.7,
+      "total_ms": 1641
     },
     {
       "id": "T14",
@@ -240,18 +240,17 @@
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
-      "score": 0.27,
+      "score": 0.5,
       "verdict": "LEGITIMATE",
-      "confidence": "high",
+      "confidence": "low",
       "indicators": [
         "empty_canvas",
-        "vpn_detected",
-        "empty_canvas"
+        "vpn_detected"
       ],
-      "reason": "[ctx=login boost=0.23] stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "[ctx=login boost=0.23] Browser reale, VPN utilizzato",
       "context": "login",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1604.3,
+      "total_ms": 1606
     },
     {
       "id": "T15",
@@ -260,16 +259,16 @@
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
-      "score": 0.1,
+      "score": 0.22,
       "verdict": "LEGITIMATE",
-      "confidence": "high",
+      "confidence": "low",
       "indicators": [
         "timezone_anomaly"
       ],
-      "reason": "[ctx=admin boost=0.12] stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "[ctx=admin boost=0.12] Browser reale, anomalia timezone",
       "context": "admin",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1593.9,
+      "total_ms": 1597
     },
     {
       "id": "T16",
@@ -278,19 +277,17 @@
       "passed": true,
       "expected": "challenge",
       "got": "challenge",
-      "score": 0.25,
+      "score": 0.39,
       "verdict": "LEGITIMATE",
-      "confidence": "high",
+      "confidence": "low",
       "indicators": [
-        "no_languages",
-        "suspicious_resolution",
         "no_languages",
         "suspicious_resolution"
       ],
-      "reason": "[ctx=login boost=0.14] stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "[ctx=login boost=0.14] Browser reale con segnali ambigui",
       "context": "login",
-      "plugin_ms": 0.2,
-      "total_ms": 2
+      "plugin_ms": 1774.6,
+      "total_ms": 1777
     },
     {
       "id": "T17",
@@ -307,7 +304,7 @@
       ],
       "reason": "Segnale critico: no_plugins_no_webgl",
       "context": "login",
-      "plugin_ms": 0.0,
+      "plugin_ms": 0.1,
       "total_ms": 2
     },
     {
@@ -321,10 +318,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "default",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1305.0,
+      "total_ms": 1307
     },
     {
       "id": "T19",
@@ -337,10 +334,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "static",
-      "plugin_ms": 0.2,
-      "total_ms": 2
+      "plugin_ms": 1344.8,
+      "total_ms": 1347
     },
     {
       "id": "T20",
@@ -353,10 +350,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "default",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1273.6,
+      "total_ms": 1276
     },
     {
       "id": "T21",
@@ -365,7 +362,7 @@
       "passed": true,
       "expected": "block",
       "got": "block",
-      "score": 0.97,
+      "score": 1.0,
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
@@ -387,10 +384,9 @@
       "verdict": "ATTACK",
       "confidence": "high",
       "indicators": [
-        "guacamole_client_marker",
-        "bitm_backend_port"
+        "guacamole_client_marker"
       ],
-      "reason": "Segnale critico: bitm_backend_port, guacamole_client_marker",
+      "reason": "Segnale critico: guacamole_client_marker",
       "context": "login",
       "plugin_ms": 0.1,
       "total_ms": 2
@@ -411,7 +407,7 @@
       "reason": "Segnale critico: xss_reflected_param",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 2
+      "total_ms": 3
     },
     {
       "id": "T24",
@@ -429,7 +425,7 @@
       "reason": "Segnale critico: webauthn_api_override",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 2
+      "total_ms": 3
     },
     {
       "id": "T25",
@@ -465,7 +461,7 @@
       "reason": "Segnale critico: bitm_framework_ua",
       "context": "login",
       "plugin_ms": 0.1,
-      "total_ms": 2
+      "total_ms": 5
     },
     {
       "id": "T27",
@@ -483,7 +479,7 @@
       "reason": "Segnale critico: bitm_websocket_transport",
       "context": "payment",
       "plugin_ms": 0.1,
-      "total_ms": 2
+      "total_ms": 3
     },
     {
       "id": "T28",
@@ -492,16 +488,16 @@
       "passed": true,
       "expected": "challenge|block",
       "got": "challenge",
-      "score": 0.25,
+      "score": 0.43,
       "verdict": "LEGITIMATE",
-      "confidence": "high",
+      "confidence": "low",
       "indicators": [
         "tunnel_host"
       ],
-      "reason": "[ctx=login boost=0.18] stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "[ctx=login boost=0.18] Browser reale, segnali ambigui",
       "context": "login",
-      "plugin_ms": 0.1,
-      "total_ms": 2
+      "plugin_ms": 1858.2,
+      "total_ms": 1860
     },
     {
       "id": "T29",
@@ -514,10 +510,10 @@
       "verdict": "LEGITIMATE",
       "confidence": "low",
       "indicators": [],
-      "reason": "stub scorer deterministico (pre_risk_score + segnali)",
+      "reason": "",
       "context": "login",
-      "plugin_ms": 0.1,
-      "total_ms": 3
+      "plugin_ms": 1293.6,
+      "total_ms": 1296
     }
   ],
   "system": [
@@ -530,9 +526,9 @@
       "extra": {
         "status": "ok",
         "version": "7.4.0",
-        "backend": "stub",
-        "model": "stub/deterministic",
-        "trajectory_analysis": false,
+        "backend": "ollama",
+        "model": "ollama/llama3.1",
+        "trajectory_analysis": true,
         "sessions": 0,
         "blocked_ips": 0,
         "store": "memory",
@@ -555,7 +551,7 @@
       "cat": "system",
       "name": "IP-block escalation dopo 3 block consecutivi",
       "passed": true,
-      "detail": "ip=203.0.113.40 in blocked=True (n blocked=1)"
+      "detail": "ip=203.0.113.45 in blocked=True (n blocked=1)"
     },
     {
       "id": "S04",
@@ -583,7 +579,7 @@
       "cat": "system",
       "name": "Cache LLM velocizza richieste successive",
       "passed": true,
-      "detail": "primo=0.0ms secondo=0.1ms"
+      "detail": "primo=0.1ms secondo=0.1ms"
     },
     {
       "id": "S08",
@@ -600,7 +596,7 @@
       "cat": "system",
       "name": "Webhook non-blocking — BLOCK risponde senza attendere il webhook",
       "passed": true,
-      "detail": "status=200  round-trip=1ms  action=block (atteso block, <4000ms)"
+      "detail": "status=200  round-trip=2ms  action=block (atteso block, <4000ms)"
     },
     {
       "id": "S10",
@@ -642,42 +638,42 @@
       "cat": "system",
       "name": "Shape collector.js triggera segnali BitM/BitM+ (contratto)",
       "passed": true,
-      "detail": "action=block  score=0.97  hit=['bitm_backend_port', 'bitm_framework_ua', 'bitm_websocket_transport', 'novnc_client_marker', 'webauthn_api_override', 'xss_reflected_param']  missing_critical=none"
+      "detail": "action=block  score=1.0  hit=['bitm_backend_port', 'bitm_framework_ua', 'bitm_websocket_transport', 'novnc_client_marker', 'webauthn_api_override', 'xss_reflected_param']  missing_critical=none"
     },
     {
       "id": "S16",
       "cat": "system",
       "name": "Health echo trajectory_analysis (v7.4)",
       "passed": true,
-      "detail": "trajectory_analysis=False"
+      "detail": "trajectory_analysis=True"
     },
     {
       "id": "S17",
       "cat": "system",
       "name": "Stub determinism trajectory (v7.4)",
       "passed": true,
-      "detail": "skip: trajectory disabilitato (off)"
+      "detail": "patterns=['panic_password_change', 'panic_password_change', 'panic_password_change']"
     },
     {
       "id": "S18",
       "cat": "system",
       "name": "Panic password change detection (v7.4)",
       "passed": true,
-      "detail": "skip: trajectory disabilitato (off)"
+      "detail": "pattern='panic_password_change' action=challenge"
     },
     {
       "id": "S19",
       "cat": "system",
       "name": "Direct admin access detection (v7.4)",
       "passed": true,
-      "detail": "skip: trajectory disabilitato (off)"
+      "detail": "pattern='direct_admin_access' action=challenge"
     },
     {
       "id": "S20",
       "cat": "system",
       "name": "Insufficient history short-circuit (v7.4)",
       "passed": true,
-      "detail": "skip: trajectory disabilitato (off)"
+      "detail": "pattern='' (atteso vuoto)"
     }
   ]
 }

@@ -15,7 +15,19 @@
   "use strict";
 
   var lastVerdict = null;
-  var bannerShown = false;
+  // Rank dell'ultimo verdict mostrato a banner: -1 = niente. Sostituisce
+  // il vecchio `bannerShown` booleano che impediva di re-renderizzare
+  // quando il verdict escala (challenge → block dopo, p.es., l'apertura
+  // tardiva di una WebSocket sospetta).
+  var bannerRank = -1;
+  var VERDICT_RANK = { allow: 0, challenge: 1, block: 2 };
+  // Dedup di computeAndReport: page-hook emette 3-4 snapshot per pagina
+  // (dom/ready, load, probe@2s). Senza dedup, ognuno triggera un
+  // sendMessage al SW e — in mode=hybrid — una fetch al backend. Saltiamo
+  // se lo snapshot semantico (verdict + critical + segnali + path) non è
+  // cambiato dall'ultimo invio. Un'escalation reale cambia la chiave e
+  // passa comunque.
+  var lastSentKey = "";
   var cachedSettings = { mode: "local", backendUrl: "", sessionId: "" };
 
   // Carica i settings una volta all'avvio; fino a quando la prima get() non
@@ -106,6 +118,11 @@
     });
   }
 
+  function snapshotKey(local, critical, page) {
+    var sigs = (local.signals || []).slice().sort().join(",");
+    return page + "|" + local.verdict + "|" + (critical ? "1" : "0") + "|" + sigs;
+  }
+
   async function computeAndReport(data) {
     var local = self.BitMDetection.detect(data);
     // Traccia la pagina corrente nel tracker trajectory (sessionStorage)
@@ -119,6 +136,13 @@
     for (var i = 0; i < local.signals.length; i++) {
       if (self.BitMDetection.CRITICAL[local.signals[i]]) { critical = true; break; }
     }
+
+    // Dedup: salta se lo snapshot semantico è invariato dall'ultimo invio.
+    // Volutamente NON includiamo lo score nella chiave — varia di pochi
+    // millesimi tra emissioni e produrrebbe falsi "cambiamenti".
+    var key = snapshotKey(local, critical, pathOf(location.href));
+    if (key === lastSentKey) return;
+    lastSentKey = key;
 
     if (cachedSettings.mode === "hybrid") {
       try {
@@ -155,6 +179,7 @@
         verdict: local.verdict,
         score: local.score,
         signals: local.signals,
+        critical: critical,
       });
     } catch (_) { /* SW asleep */ }
     maybeShowBanner(lastVerdict);
@@ -177,14 +202,19 @@
   function maybeShowBanner(v) {
     if (!v) return;
     if (v.verdict === "allow") return;
-    if (bannerShown) return;
     if (!self.BitMBanner) return;
-    bannerShown = self.BitMBanner.show({
+    var newRank = VERDICT_RANK[v.verdict];
+    if (typeof newRank !== "number") return;
+    // Mostra solo se primo banner OPPURE escalation (challenge → block).
+    // BitMBanner.show() sostituisce il nodo precedente se esiste.
+    if (newRank <= bannerRank) return;
+    var ok = self.BitMBanner.show({
       verdict: v.verdict,
       signals: v.signals,
       explanationUser: v.explanationUser,
       pattern: v.pattern,
     });
+    if (ok) bannerRank = newRank;
   }
 
   // ── Listener per snapshot dal page-hook ─────────────────────────────────────

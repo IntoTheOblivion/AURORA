@@ -42,6 +42,8 @@
   "settings_test_button":  { "message": "Testa connessione" },
   "settings_test_ok":      { "message": "Connesso" },
   "settings_test_fail":    { "message": "Non raggiungibile" },
+  "settings_test_cors":    { "message": "Backend raggiungibile ma blocca CORS — abilita Access-Control-Allow-Origin per chrome-extension://" },
+  "settings_test_invalid_scheme": { "message": "URL non valido — usa http:// o https://" },
   "settings_netrules_label": { "message": "Blocca tunnel noti a livello rete" },
   "settings_save":         { "message": "Salva" },
   "settings_saved":        { "message": "Salvato" }

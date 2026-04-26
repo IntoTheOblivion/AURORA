@@ -65,6 +65,10 @@ _AMPLIFIER_WEIGHTS: dict[str, float] = {
     "no_timezone":           0.06,
     "suspicious_resolution": 0.06,
     "timezone_anomaly":      0.12,   # UTC + lingua non-EN su admin è genuinamente sospetto
+    # Latenza: amplificata solo su contesti sensibili. La soglia extreme
+    # è già in CRITICAL_BLOCK, quindi qui pesiamo solo high/elevated.
+    "high_latency":          0.12,   # 300-600ms → su /payment porta sopra challenge
+    "elevated_latency":      0.05,
     # BitM+ infrastruttura "debole" (ngrok può essere legittimo in dev):
     # alzare soglia su login/payment/admin, non sufficiente da solo in default.
     "tunnel_host":           0.18,
@@ -111,6 +115,11 @@ def decide(score_result: dict, context: str = "default",
     3. Boost contestuale (cappato a MAX_BOOST) su set deduplicato
     4. Trajectory boost (cappato a TRAJ_BOOST_CAP) — non è un floor
     5. Soglie contestuali
+
+    Effetto collaterale: aggiorna `score_result["risk_score"]` con lo score
+    amplificato effettivamente usato, così il chiamante può riportarlo al
+    client (altrimenti UI e action risulterebbero incoerenti: es.
+    score=0.40 + action=block).
     """
     # ATTENZIONE: usare `or` con score è sbagliato perché 0.0 è falsy in Python
     # → `0.0 or 0.5` restituisce 0.5. Usare sempre controllo esplicito su None.
@@ -135,6 +144,7 @@ def decide(score_result: dict, context: str = "default",
     critical_found = indicators & CRITICAL_BLOCK
     if critical_found:
         label = ", ".join(sorted(critical_found)[:3])
+        score_result["risk_score"] = max(score, 0.97)
         return Action.BLOCK, f"Segnale critico: {label}"
 
     # 2. Boost contestuale su set deduplicato, con pesi individuali e cap
@@ -164,6 +174,9 @@ def decide(score_result: dict, context: str = "default",
 
     # 4. Soglie contestuali
     thresh_challenge, thresh_block = THRESHOLDS.get(context, THRESHOLDS["default"])
+
+    # Sovrascrivi lo score esposto con quello amplificato (riflette la decisione).
+    score_result["risk_score"] = round(amplified, 3)
 
     if amplified >= thresh_block:
         return Action.BLOCK, explanation

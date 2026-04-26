@@ -262,7 +262,10 @@ let retry = 1000;
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${proto}//${location.host}/ws/events`);
+  // Se la dashboard è stata aperta con ?token=..., lo inoltra al WS.
+  const t = new URLSearchParams(location.search).get("token");
+  const qs = t ? `?token=${encodeURIComponent(t)}` : "";
+  ws = new WebSocket(`${proto}//${location.host}/ws/events${qs}`);
 
   ws.onopen = () => {
     dot.classList.add("on");

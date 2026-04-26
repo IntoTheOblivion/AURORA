@@ -1,9 +1,16 @@
 """Logger v4 — stdout colorato + file JSONL."""
 
 import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
-LOG_FILE = "bitm_events.jsonl"
+# Path del log: risolto relativo alla radice del progetto (parent del pacchetto
+# `app/`), così il file finisce sempre in `bitm-plugin/bitm_events.jsonl`
+# indipendentemente dalla CWD dal quale uvicorn / i test vengono invocati.
+# Override esplicito via env BITM_LOG_FILE (path assoluto consigliato).
+_DEFAULT_LOG = Path(__file__).resolve().parent.parent / "bitm_events.jsonl"
+LOG_FILE = os.getenv("BITM_LOG_FILE", str(_DEFAULT_LOG))
 
 _C = {
     "allow":     "\033[32m",

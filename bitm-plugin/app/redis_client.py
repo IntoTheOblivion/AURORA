@@ -235,6 +235,10 @@ class SessionStore:
         """
         True se l'IP è entro la soglia (richiesta accettata), False se va bloccato.
         Implementato come sliding window: elimina timestamp scaduti e contrae.
+
+        Nota: il timestamp viene inserito SOLO se la richiesta è accettata,
+        per evitare che richieste rifiutate gonfino la finestra e causino
+        rigetti futuri. Comportamento allineato al ramo in-memory.
         """
         now = time.time()
         cutoff = now - window_s
@@ -242,13 +246,22 @@ class SessionStore:
         if self._connected:
             try:
                 key = self._k_rate(ip)
+                # Fase 1: pulisci e conta (senza inserire)
                 pipe = self._client.pipeline()
                 pipe.zremrangebyscore(key, 0, cutoff)
                 pipe.zcard(key)
-                pipe.zadd(key, {f"{now}": now})
+                _, count = await pipe.execute()
+                if int(count) >= limit:
+                    return False
+                # Fase 2: inseriamo solo se accettato
+                pipe = self._client.pipeline()
+                # Membro unico: timestamp + ip — evita collisioni tra richieste
+                # dello stesso micro-secondo (molto rare ma possibili).
+                member = f"{now}:{ip}"
+                pipe.zadd(key, {member: now})
                 pipe.expire(key, window_s + 1)
-                _, count, _, _ = await pipe.execute()
-                return int(count) < limit
+                await pipe.execute()
+                return True
             except Exception as e:
                 print(f"[redis] rate_check degraded: {e}")
                 self._connected = False

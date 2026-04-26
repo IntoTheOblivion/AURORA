@@ -182,9 +182,16 @@ def _detect_headless(raw: dict, ua_lower: str,
     if screen in ("800x600", "1024x768", "0x0", ""):
         signals.append("suspicious_resolution")
 
-    # Color depth anomala
-    if (raw.get("colorDepth") or 24) < 8:
-        signals.append("low_color_depth")
+    # Color depth anomala. Attenzione: usare `or 24` maschera il caso
+    # colorDepth=0 (falsy) che è esattamente quello che vogliamo segnalare.
+    cd = raw.get("colorDepth")
+    if cd is None:
+        cd = 24
+    try:
+        if int(cd) < 8:
+            signals.append("low_color_depth")
+    except (TypeError, ValueError):
+        pass
 
     # Timezone mancante (browser reali hanno sempre un timezone)
     if not (raw.get("timezone") or "").strip():
@@ -332,16 +339,19 @@ def _pre_score(raw: dict, headless_signals: list, bitm_signals: list,
             score += w
             confirmed.append(sig)
 
-    # Latenza (soglie alzate: event loop JS-heavy come YouTube può superare 500ms)
-    if avg_timing > 2000:
-        score += 0.32
-        confirmed.append(f"extreme_latency_{int(avg_timing)}ms")
-    elif avg_timing > 1000:
-        score += 0.22
-        confirmed.append(f"high_latency_{int(avg_timing)}ms")
-    elif avg_timing > 500:
-        score += 0.09
-        confirmed.append(f"elevated_latency_{int(avg_timing)}ms")
+    # Latenza. Etichette stabili (senza ms) così policy.CRITICAL_BLOCK e
+    # _AMPLIFIER_WEIGHTS possono matcharle direttamente. L'entità viene
+    # comunque riportata nel prompt via avg_timing_ms e nell'esplosione
+    # confirmed dell'LLM.
+    if avg_timing > 600:
+        score += 0.35
+        confirmed.append("extreme_latency")
+    elif avg_timing > 300:
+        score += 0.15
+        confirmed.append("high_latency")
+    elif avg_timing > 150:
+        score += 0.05
+        confirmed.append("elevated_latency")
 
     # VPN / Tor (risolti dal GeoIP)
     if ip_meta.get("is_tor"):

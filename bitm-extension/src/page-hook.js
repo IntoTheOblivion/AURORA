@@ -19,23 +19,31 @@
   window.__bitmHookInstalled = true;
 
   var wsEndpoints = [];
-  var startedAt = (typeof performance !== "undefined" && performance.now)
-    ? performance.now() : Date.now();
 
   // ── WebSocket patch ────────────────────────────────────────────────────────
+  // Usiamo Proxy invece di sostituire il costruttore: il vecchio approccio
+  // (function wrapper + Patched.prototype = Native.prototype) rompeva
+  // `WebSocket.name`, le costanti statiche non-enumerabili (CONNECTING/OPEN/
+  // CLOSING/CLOSED venivano copiate solo se enumerabili) e `WebSocket.toString()`
+  // svelava il monkey-patch ad eventuali check anti-tamper della pagina.
+  // Proxy con un solo trap `construct` è trasparente a tutto il resto.
   try {
     var Native = window.WebSocket;
     if (Native && !Native.__bitmPatched) {
-      var Patched = function (url, protocols) {
-        try { wsEndpoints.push(String(url)); } catch (_) { /* noop */ }
-        return protocols !== undefined ? new Native(url, protocols) : new Native(url);
-      };
-      Patched.prototype = Native.prototype;
-      Patched.__bitmPatched = true;
-      for (var k in Native) {
-        try { Patched[k] = Native[k]; } catch (_) { /* noop */ }
-      }
-      window.WebSocket = Patched;
+      var Patched = new Proxy(Native, {
+        construct: function (target, args) {
+          try {
+            if (args && args.length > 0) wsEndpoints.push(String(args[0]));
+          } catch (_) { /* noop */ }
+          return Reflect.construct(target, args);
+        },
+      });
+      // Marker sul Native: idempotenza anche se un altro script applica
+      // un proxy successivamente (controllo del flag prima del wrap).
+      try {
+        Object.defineProperty(Native, "__bitmPatched", { value: true, configurable: false });
+      } catch (_) { Native.__bitmPatched = true; }
+      try { window.WebSocket = Patched; } catch (_) { /* readonly: rinuncia */ }
     }
   } catch (_) { /* noop */ }
 
@@ -50,28 +58,34 @@
     }
   }
 
-  function snapshot(reason) {
-    var now = (typeof performance !== "undefined" && performance.now)
-      ? performance.now() : Date.now();
-    return {
-      reason: reason,
-      title: document.title || "",
-      pageUrl: location.href || "",
-      referrer: document.referrer || "",
-      userAgent: navigator.userAgent || "",
-      wsEndpoints: wsEndpoints.slice(),
-      credentialsGetNative: credentialsGetNative(),
-      iframeCount: (function () {
-        try { return document.getElementsByTagName("iframe").length; }
-        catch (_) { return 0; }
-      })(),
-      timing: Math.round(now - startedAt),
-    };
+  function snapshot(reason, cb) {
+    var t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    setTimeout(function () {
+      var t1 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      cb({
+        reason: reason,
+        title: document.title || "",
+        pageUrl: location.href || "",
+        referrer: document.referrer || "",
+        userAgent: navigator.userAgent || "",
+        wsEndpoints: wsEndpoints.slice(),
+        credentialsGetNative: credentialsGetNative(),
+        iframeCount: (function () {
+          try { return document.getElementsByTagName("iframe").length; }
+          catch (_) { return 0; }
+        })(),
+        timing: Math.round(t1 - t0),
+      });
+    }, 10);
   }
 
   function emit(reason) {
     try {
-      window.postMessage({ source: "bitm-hook", reason: reason, data: snapshot(reason) }, "*");
+      snapshot(reason, function (data) {
+        try {
+          window.postMessage({ source: "bitm-hook", reason: reason, data: data }, "*");
+        } catch (_) { /* noop */ }
+      });
     } catch (_) { /* noop */ }
   }
 

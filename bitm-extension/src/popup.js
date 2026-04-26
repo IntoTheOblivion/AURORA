@@ -159,9 +159,11 @@
 
       var verdictSpan = document.createElement("span");
       verdictSpan.className = "row-verdict " + verdictClass;
-      verdictSpan.textContent = ev.verdict === "block"
+      var verdictLabel = ev.verdict === "block"
         ? t("popup_verdict_block", "Bloccato")
         : t("popup_verdict_challenge", "Sospetto");
+      if (ev.count && ev.count > 1) verdictLabel += " ×" + ev.count;
+      verdictSpan.textContent = verdictLabel;
       li.appendChild(verdictSpan);
 
       var originEl = document.createElement("strong");
@@ -226,11 +228,35 @@
           testResult.textContent = t("settings_test_ok", "Connesso") +
             " — v" + (r.version || "?") + " · backend=" + (r.backend || "?") +
             (r.trajectory ? " · trajectory:on" : "");
-        } else {
-          testResult.className = "test-result fail";
-          testResult.textContent = t("settings_test_fail", "Non raggiungibile") +
-            (r && r.status ? " (HTTP " + r.status + ")" : "");
+          return;
         }
+        testResult.className = "test-result fail";
+        if (!r) {
+          testResult.textContent = t("settings_test_fail", "Non raggiungibile");
+          return;
+        }
+        if (r.error === "cors_blocked") {
+          // Caso più frequente in dev: backend up, manca header CORS per
+          // l'origin chrome-extension://. Diciamo all'utente cosa fare.
+          testResult.textContent = t(
+            "settings_test_cors",
+            "Backend raggiungibile ma blocca CORS — abilita Access-Control-Allow-Origin per chrome-extension://"
+          );
+          return;
+        }
+        if (r.error === "invalid_scheme") {
+          testResult.textContent = t(
+            "settings_test_invalid_scheme",
+            "URL non valido — usa http:// o https://"
+          );
+          return;
+        }
+        if (r.error === "http_status") {
+          testResult.textContent = t("settings_test_fail", "Non raggiungibile") + " (HTTP " + r.status + ")";
+          return;
+        }
+        // unreachable o errore generico
+        testResult.textContent = t("settings_test_fail", "Non raggiungibile");
       }
     );
   });

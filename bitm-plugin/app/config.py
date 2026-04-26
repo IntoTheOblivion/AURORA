@@ -31,10 +31,59 @@ Variabili supportate:
   WEBHOOK_CONFIG_FILE=/path/to/webhook.json   config completa via JSON
 """
 
+import ipaddress
 import os
 
 # ── Backend selector ──────────────────────────────────────────────────────────
 LLM_BACKEND: str = os.getenv("LLM_BACKEND", "stub").strip().lower()
+
+
+# ── Trusted proxies (per X-Forwarded-For) ─────────────────────────────────────
+# CSV di IP o CIDR. Vuoto (default) = non fidarsi mai dell'header XFF.
+# Esempio produzione dietro nginx/ingress:
+#   TRUSTED_PROXIES=10.0.0.0/8,127.0.0.1
+def _parse_trusted_proxies(raw: str) -> list:
+    out = []
+    for item in (raw or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            out.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            print(f"[config] TRUSTED_PROXIES: valore ignorato '{item}'")
+    return out
+
+
+TRUSTED_PROXIES = _parse_trusted_proxies(os.getenv("TRUSTED_PROXIES", ""))
+
+
+# ── Admin token ───────────────────────────────────────────────────────────────
+# Se impostato, protegge /api/bitm/sessions (GET/DELETE), /dashboard e
+# /ws/events. Richiesto via header X-Admin-Token (JSON) o query ?token=
+# (dashboard/WS dove non si può impostare l'header). Vuoto = endpoint aperti
+# (retrocompatibile, ma il server stampa un warning al startup).
+ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "").strip()
+
+
+def is_trusted_proxy(ip: str) -> bool:
+    if not TRUSTED_PROXIES or not ip:
+        return False
+    try:
+        addr = ipaddress.ip_address(ip)
+    except (ValueError, TypeError):
+        return False
+    return any(addr in net for net in TRUSTED_PROXIES)
+
+
+def check_admin_token(provided: str | None) -> bool:
+    """Confronta in tempo costante per evitare timing attack."""
+    import hmac
+    if not ADMIN_TOKEN:
+        return True   # auth disattivata
+    if not provided:
+        return False
+    return hmac.compare_digest(ADMIN_TOKEN, provided)
 
 # ── Anthropic ─────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "").strip()
