@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     print(f"[bitm] Session store: {_store.backend}")
     print(f"[bitm] GeoIP: {geoip_summary()}")
     if not ADMIN_TOKEN:
-        print("[bitm] ⚠ ADMIN_TOKEN non impostato: endpoint admin/dashboard "
+        print("[bitm] [!] ADMIN_TOKEN non impostato: endpoint admin/dashboard "
               "/ws/events accessibili senza autenticazione")
     try:
         yield

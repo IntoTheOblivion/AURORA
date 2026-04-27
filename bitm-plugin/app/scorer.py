@@ -76,7 +76,7 @@ def _cache_get(key: str) -> dict | None:
     if entry:
         result, ts = entry
         if time.time() - ts < CACHE_TTL_S:
-            return result
+            return {**result}  # copia: policy.decide modifica risk_score in-place
         del _score_cache[key]
     return None
 
@@ -486,7 +486,9 @@ async def score_session(features: dict) -> dict:
     ):
         return result  # non caching degli errori
 
-    _cache_set(cache_key, result)
+    # Salva una copia shallow: policy.decide modifica risk_score in-place nel
+    # dict restituito al chiamante, corrompendo la cache se fosse lo stesso oggetto.
+    _cache_set(cache_key, {**result})
     return result
 
 
@@ -830,7 +832,7 @@ async def analyze_trajectory(session_state: dict, features: dict) -> dict:
             score=0.0,
             admin=f"Nessun pattern sensibile in {len(pages)} pagine ({elapsed:.1f}s)",
         )
-        _cache_set_traj(cache_key, result)
+        _cache_set_traj(cache_key, {**result})
         return result
 
     if LLM_BACKEND == "stub":
@@ -848,5 +850,5 @@ async def analyze_trajectory(session_state: dict, features: dict) -> dict:
     ):
         return result
 
-    _cache_set_traj(cache_key, result)
+    _cache_set_traj(cache_key, {**result})
     return result
