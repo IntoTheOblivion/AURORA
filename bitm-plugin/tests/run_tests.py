@@ -34,6 +34,12 @@ from pathlib import Path
 
 import httpx
 
+# Fix encoding su Windows (console cp1252 non supporta i caratteri Unicode usati nei report)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 # ── Colori ANSI ───────────────────────────────────────────────────────────────
 G = "\033[32m"; R = "\033[31m"; Y = "\033[33m"; C = "\033[36m"
@@ -469,11 +475,13 @@ CASES: list[dict] = [
 #   TEST RUNNER per scenari
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run_case(client: httpx.AsyncClient, case: dict, base: str) -> dict:
+async def run_case(client: httpx.AsyncClient, case: dict, base: str,
+                   extra_headers: dict | None = None) -> dict:
     t0 = time.time()
     try:
         r    = await client.post(f"{base}/api/bitm/collect",
-                                 json=case["payload"], timeout=60)
+                                 json=case["payload"], timeout=60,
+                                 headers=extra_headers or {})
         data = r.json()
         ms   = round((time.time() - t0) * 1000)
         got  = data.get("action", "?")
@@ -1376,12 +1384,20 @@ async def main():
                         help="Numero di test in parallelo (default 1)")
     parser.add_argument("--skip-system", action="store_true",
                         help="Salta i system check v6.0")
+    parser.add_argument("--admin-token",
+                        default=os.getenv("BITM_ADMIN_TOKEN", ""),
+                        help="Token per endpoint admin (default: env BITM_ADMIN_TOKEN)")
     args = parser.parse_args()
 
     base = os.getenv("BITM_URL", "http://localhost:8000")
     print(f"{B}Connessione a {base}...{X}")
 
-    async with httpx.AsyncClient() as client:
+    # Header di default: include il token admin se fornito
+    default_headers = {}
+    if args.admin_token:
+        default_headers["X-Admin-Token"] = args.admin_token
+
+    async with httpx.AsyncClient(headers=default_headers) as client:
         try:
             h = await client.get(f"{base}/health", timeout=5)
             info = h.json()
@@ -1406,11 +1422,32 @@ async def main():
         results: list = []
         if args.parallel > 1:
             sem = asyncio.Semaphore(args.parallel)
-            async def _guarded(c):
+
+            async def _guarded(c: dict):
                 async with sem:
                     print(f"  {C}▶{X} [{c['id']}] {c['name'][:50]}")
                     return await run_case(client, c, base)
-            results = await asyncio.gather(*[_guarded(c) for c in cases])
+
+            # In modalità parallela i test ATTACK/BITM producono BLOCK e, dopo
+            # 3 BLOCK consecutivi dallo stesso IP (127.0.0.1), il server banna
+            # l'IP. I test SUSPICIOUS/EDGE successivi verrebbero bloccati
+            # automaticamente producendo falsi negativi.
+            # Soluzione: esegui prima i test che producono BLOCK, poi azzera lo
+            # stato (sessioni + IP bannati) e infine esegui SUSPICIOUS/EDGE.
+            blocking_cats = {"attack", "bitm"}
+            batch_blocking = [c for c in cases if c["cat"] in blocking_cats]
+            batch_safe     = [c for c in cases if c["cat"] not in blocking_cats]
+
+            res_blocking = await asyncio.gather(*[_guarded(c) for c in batch_blocking])
+            try:
+                await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+            except Exception:
+                pass
+            res_safe = await asyncio.gather(*[_guarded(c) for c in batch_safe])
+
+            # Ricompone i risultati nell'ordine originale dei casi
+            result_map = {r["id"]: r for r in (*res_blocking, *res_safe)}
+            results = [result_map[c["id"]] for c in cases if c["id"] in result_map]
         else:
             for c in cases:
                 label = f"[{c['id']}] {c['name'][:52]}"
