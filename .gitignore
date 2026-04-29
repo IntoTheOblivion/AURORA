@@ -35,6 +35,5 @@ bitm-plugin/test_report.json
 node_modules/
 *.log
 
-# Tesi — output generati da genera_tesi.py
-tesi/tesi_BitM_LLM.docx
-tesi/tesi_figures/
+# Tesi — non ancora pronta per il repo
+tesi/
