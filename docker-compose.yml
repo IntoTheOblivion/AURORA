@@ -36,6 +36,15 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--appendonly", "no"]
 
+  #ollama:
+    #image: ollama/ollama:latest
+    #container_name: bitm-ollama
+    #profiles: ["ollama"]
+    #ports:
+    #  - "11434:11434"
+    #volumes:
+    #  - ollama-models:/root/.ollama
+    #restart: unless-stopped
   ollama:
     image: ollama/ollama:latest
     container_name: bitm-ollama
@@ -45,6 +54,13 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 volumes:
   ollama-models:
