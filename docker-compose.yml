@@ -1,14 +1,31 @@
 # BitM-LLM Shield — docker-compose one-shot
 #
 # Usage:
-#   docker compose up                         # solo api (backend stub, zero-config)
-#   docker compose --profile redis up         # api + redis (sessioni persistenti multi-worker)
-#   docker compose --profile ollama up        # api + ollama (LLM locale, no API key)
-#   docker compose --profile redis --profile ollama up   # stack completo
+#   docker compose up                                       # solo api (backend stub, zero-config)
+#   docker compose --profile redis up                       # api + redis (sessioni persistenti multi-worker)
+#   docker compose --profile ollama up                      # api + ollama CPU (funziona ovunque)
+#   docker compose --profile ollama-gpu up                  # api + ollama con NVIDIA GPU (~10x più veloce)
+#   docker compose --profile redis --profile ollama-gpu up  # stack completo con GPU
 #
 # Variabili d'ambiente:
 #   LLM_BACKEND=stub|anthropic|ollama   (default: stub)
 #   ANTHROPIC_API_KEY=sk-ant-...        (solo se LLM_BACKEND=anthropic)
+#
+# Nota GPU: i profili "ollama" e "ollama-gpu" sono mutuamente esclusivi —
+# attivane uno solo. Il profilo "ollama-gpu" richiede:
+#   • Linux con nvidia-container-toolkit installato sull'host
+#   • Windows con WSL2 + driver NVIDIA con supporto CUDA-on-WSL
+# Se l'host non ha una GPU NVIDIA o i driver non sono configurati, usa
+# "--profile ollama" (CPU): stesso risultato funzionale, solo più lento.
+
+x-ollama-base: &ollama-base
+  image: ollama/ollama:latest
+  container_name: bitm-ollama
+  ports:
+    - "11434:11434"
+  volumes:
+    - ollama-models:/root/.ollama
+  restart: unless-stopped
 
 services:
   api:
@@ -39,24 +56,21 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--appendonly", "no"]
 
-  #ollama:
-    #image: ollama/ollama:latest
-    #container_name: bitm-ollama
-    #profiles: ["ollama"]
-    #ports:
-    #  - "11434:11434"
-    #volumes:
-    #  - ollama-models:/root/.ollama
-    #restart: unless-stopped
+  # ── Ollama CPU — funziona ovunque, nessuna dipendenza extra ─────────────
   ollama:
-    image: ollama/ollama:latest
-    container_name: bitm-ollama
+    <<: *ollama-base
     profiles: ["ollama"]
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    restart: unless-stopped
+
+  # ── Ollama GPU — richiede nvidia-container-toolkit (Linux/WSL2) ──────────
+  # Esposto sulla rete con alias "ollama" così l'api può continuare a usare
+  # OLLAMA_HOST=http://ollama:11434 senza modifiche.
+  ollama-gpu:
+    <<: *ollama-base
+    profiles: ["ollama-gpu"]
+    networks:
+      default:
+        aliases:
+          - ollama
     deploy:
       resources:
         reservations:
