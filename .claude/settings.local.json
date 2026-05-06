@@ -13,7 +13,10 @@
       "Bash(curl -s http://localhost:8000/health)",
       "Bash(node *)",
       "Bash(curl *)",
-      "Bash(PYTHONIOENCODING=utf-8 C:/Users/gabri/PycharmProjects/Bitm_LLM/.venv/Scripts/python.exe tests/_e2e_collector_banner.py)"
+      "Bash(PYTHONIOENCODING=utf-8 C:/Users/gabri/PycharmProjects/Bitm_LLM/.venv/Scripts/python.exe tests/_e2e_collector_banner.py)",
+      "Bash(git rm *)",
+      "Bash(git -C \"C:/Users/gabri/PycharmProjects/Bitm_LLM\" check-ignore -v bitm-attack-sandbox/Dockerfile bitm-attack-sandbox/scripts/bitm_addon.py)",
+      "Bash(git -C \"C:/Users/gabri/PycharmProjects/Bitm_LLM\" status --short)"
     ]
   }
 }

@@ -1,8 +1,8 @@
-# BitM Detection Plugin
+# BitM-LLM Shield
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 7.4.2** (runtime) · **Estensione browser v0.2.0** (BitM Shield, MV3)
+> **Versione corrente: 7.4.2** (runtime) · **Estensione browser v0.2.0** (BitM-LLM Shield, MV3)
 > Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`bitm-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
@@ -43,7 +43,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
 - [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
 - [Analisi LLM della traiettoria (v7.4)](#-analisi-llm-della-traiettoria-v74)
-- [Estensione browser BitM Shield (v0.1)](#-estensione-browser-bitm-shield-v01)
+- [Estensione browser BitM-LLM Shield (v0.1)](#-estensione-browser-bitm-llm-shield-v01)
 - [Changelog](#-changelog)
 
 ---
@@ -102,7 +102,7 @@ Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), 
 2. Attiva "Modalità sviluppatore" in alto a destra
 3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `bitm-extension/`
 
-L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser BitM Shield](#-estensione-browser-bitm-shield-v01) per il dettaglio.
+L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser BitM-LLM Shield](#-estensione-browser-bitm-llm-shield-v01) per il dettaglio.
 
 ---
 
@@ -439,11 +439,11 @@ Lo script prova a connettersi al backend LLM configurato e stampa un report (mod
 
 ---
 
-### Path C — Estensione browser (BitM Shield)
+### Path C — Estensione browser (BitM-LLM Shield)
 
 L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcuna chiamata di rete verso il server BitM.
 
-**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-bitm-shield-v01)).
+**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-bitm-llm-shield-v01)).
 
 #### C.1 — Installazione in modalità sviluppatore
 
@@ -452,7 +452,7 @@ L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcu
 3. Clicca **Carica estensione non pacchettizzata**
 4. Seleziona la cartella `bitm-extension/` (quella che contiene `manifest.json`)
 
-L'estensione appare nella lista con il nome **BitM Shield** e la versione **0.1.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a BitM Shield) per vedere il badge per-tab.
+L'estensione appare nella lista con il nome **BitM-LLM Shield** e la versione **0.1.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a BitM-LLM Shield) per vedere il badge per-tab.
 
 #### C.2 — Verifica funzionamento
 
@@ -466,7 +466,7 @@ Apri un sito normale (es. `https://example.com`):
 
 #### C.3 — Disinstallazione
 
-`chrome://extensions` → clicca **Rimuovi** sulla scheda BitM Shield. L'estensione non scrive nulla su disco remoto; rimuoverla cancella tutto il suo stato.
+`chrome://extensions` → clicca **Rimuovi** sulla scheda BitM-LLM Shield. L'estensione non scrive nulla su disco remoto; rimuoverla cancella tutto il suo stato.
 
 ---
 
@@ -549,7 +549,7 @@ Eventi di "avvio" visibili all'utente:
 - Caricamento di una pagina → in 1-2 secondi badge verde/arancio/rosso a seconda del verdetto
 - Apertura del popup → verdetto, score, lista segnali, origin
 
-Per ricaricare l'estensione dopo una modifica al codice: `chrome://extensions` → clicca l'icona di refresh sulla scheda BitM Shield, poi ricarica le tab aperte.
+Per ricaricare l'estensione dopo una modifica al codice: `chrome://extensions` → clicca l'icona di refresh sulla scheda BitM-LLM Shield, poi ricarica le tab aperte.
 
 ### Avvio combinato: backend + collector su sito + estensione
 
@@ -853,7 +853,7 @@ BLOCK action
 ```json
 {
   "event_type": "BLOCK",
-  "product": "BitM Detection Plugin",
+  "product": "BitM-LLM Shield",
   "version": "6.2",
   "timestamp": "2026-04-16T10:00:00Z",
   "severity": "HIGH",
@@ -1272,7 +1272,7 @@ Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coni
 
 ---
 
-## 🛡 Estensione browser BitM Shield (v0.1)
+## 🛡 Estensione browser BitM-LLM Shield (v0.1)
 
 Mentre il backend server-side (`bitm-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `bitm-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere.
 
@@ -1432,7 +1432,7 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 
 
 
-### v0.2.0 (estensione) — BitM Shield backend-aware hardening
+### v0.2.0 (estensione) — BitM-LLM Shield backend-aware hardening
 - **Tre modalità operative** (popup → Settings → `off | local | hybrid`). Default `local` preserva l'invariante v0.1: zero rete, zero storage remoto. `hybrid` opt-in: l'estensione POSTa fingerprint + trajectory al backend `/api/bitm/collect` e riceve `explanation_user`/`trajectory_pattern` generati da LLM (riusa la pipeline v7.4)
 - **Banner condiviso** (`src/banner.js`): Shadow DOM `mode:"closed"`, colori rosso `#c0392b` (block) / arancio `#d68910` (challenge), titolo i18n "Richiesta bloccata"/"Richiesta sospetta"/"Blocked request". Se `explanation_user` arriva dal backend sostituisce il fallback locale. Stessa forma del banner `collector.js` v7.4 (DRY cross-component)
 - **Session tracker** (`src/session.js`): accumula `pages[]+timings[]` per-origin in `sessionStorage`, sliding window 20/40, inviato al backend come contesto trajectory per ottenere pattern `panic_password_change` / `direct_admin_access` / `rapid_navigation`
@@ -1445,7 +1445,7 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 
 
 
-### v0.1.0 (estensione) — BitM Shield browser extension (MV3)
+### v0.1.0 (estensione) — BitM-LLM Shield browser extension (MV3)
 - **`bitm-extension/`** — Estensione Chromium MV3 per protezione lato utente su qualsiasi sito
 - **Porting JS delle regole** (`src/detection.js`) di `extractor._detect_bitm` + `_pre_score`: 9 segnali, stesse regex e stessi pesi del backend, insieme `CRITICAL` allineato con `policy.CRITICAL_BLOCK`
 - **Page-hook in MAIN world** (`src/page-hook.js`): WebSocket patcher per tracciare endpoint aperti + ispezione `navigator.credentials.get` per detection `evilGet`

@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository layout
 
 - `bitm-plugin/` — the FastAPI detection service (the only thing that runs in production). All backend commands run from here.
-- `bitm-extension/` — Chrome Manifest V3 extension ("BitM Shield") that acts as the browser-side collector and shows the block/challenge banner. Loads `src/page-hook.js` in MAIN world at `document_start`, plus a chain of isolated content scripts (`settings → detection → session → banner → content-script`).
+- `bitm-extension/` — Chrome Manifest V3 extension ("BitM-LLM Shield") that acts as the browser-side collector and shows the block/challenge banner. Loads `src/page-hook.js` in MAIN world at `document_start`, plus a chain of isolated content scripts (`settings → detection → session → banner → content-script`).
 - `tesi/` — thesis material (Italian, University of Bari): `genera_tesi.py` builds `tesi_BitM_LLM.docx` from `Template_Tesi.docx` and the `tesi_figures/*.png` it produces. `tesi/doc/` holds the reference papers. Run with `python tesi/genera_tesi.py`; output is always written next to the script regardless of CWD.
 - `docker-compose.yml` (root) — profiles `api`, `redis`, `ollama` for the full stack.
 

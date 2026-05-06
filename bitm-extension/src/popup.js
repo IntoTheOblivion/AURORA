@@ -1,5 +1,5 @@
 /*
- * BitM Shield — popup.js (v0.2.0)
+ * BitM-LLM Shield — popup.js (v0.2.0)
  *
  * Tab Status: verdict + spiegazione (da hybrid se disponibile) della tab attiva.
  * Tab History: ring buffer `bitm-history` in chrome.storage.local.

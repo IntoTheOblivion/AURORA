@@ -1,5 +1,5 @@
 /*
- * BitM Shield — page-hook.js
+ * BitM-LLM Shield — page-hook.js
  *
  * Gira nel MAIN world della pagina (stesso contesto dello script della pagina).
  * Raccoglie SOLO segnali che il content script (ISOLATED world) non vede:

@@ -1,5 +1,5 @@
 /*
- * BitM Shield — manual_playwright.js
+ * BitM-LLM Shield — manual_playwright.js
  *
  * Test manuale (non CI) che copre i 4 scenari v0.2.0:
  *   1. Locale offline (mode=local): pagina "noVNC" → block + banner IT

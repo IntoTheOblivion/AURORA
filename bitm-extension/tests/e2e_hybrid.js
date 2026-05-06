@@ -1,5 +1,5 @@
 /*
- * BitM Shield — e2e_hybrid.js
+ * BitM-LLM Shield — e2e_hybrid.js
  *
  * Test E2E automatico del flusso hybrid extension ↔ backend v7.4.
  * Verifica su 3 canali indipendenti che una traiettoria login → change-password
