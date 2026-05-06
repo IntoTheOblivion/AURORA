@@ -2,16 +2,16 @@
   "ext_description": {
     "message": "Rileva attacchi Browser-in-the-Middle (noVNC, Guacamole, evilGet, tunnel HTTPS). Modalità locale (default) o ibrida con backend bitm-plugin."
   },
-  "action_title": { "message": "BitM Shield" },
+  "action_title": { "message": "BitM-LLM Shield" },
 
   "banner_block_title":    { "message": "Richiesta bloccata" },
   "banner_challenge_title": { "message": "Richiesta sospetta" },
   "banner_dismiss":        { "message": "Chiudi" },
   "banner_submit_blocked": { "message": "Invio del form bloccato per sicurezza." },
 
-  "badge_title_allow":     { "message": "BitM Shield — pagina pulita" },
-  "badge_title_challenge": { "message": "BitM Shield — segnali sospetti" },
-  "badge_title_block":     { "message": "BitM Shield — BLOCCO: rilevato BitM" },
+  "badge_title_allow":     { "message": "BitM-LLM Shield — pagina pulita" },
+  "badge_title_challenge": { "message": "BitM-LLM Shield — segnali sospetti" },
+  "badge_title_block":     { "message": "BitM-LLM Shield — BLOCCO: rilevato BitM" },
 
   "popup_tab_status":   { "message": "Stato" },
   "popup_tab_history":  { "message": "Storico" },

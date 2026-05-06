@@ -1,5 +1,5 @@
 """
-BitM Detection Plugin — FastAPI server v6.2
+BitM-LLM Shield — FastAPI server v6.2
 
 Novità v6:
 - Sessioni persistenti su Redis (SessionStore), condivisibili tra processi/istanze
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
         await _store.close()
 
 
-app = FastAPI(title="BitM Detection Plugin", version="7.4.2", lifespan=lifespan)
+app = FastAPI(title="BitM-LLM Shield", version="7.4.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,6 +143,7 @@ async def collector():
 async def health():
     return {
         "status":              "ok",
+        "service":             "BitM-LLM Shield",
         "version":             "7.4.2",
         "backend":             LLM_BACKEND,
         "model":               get_selected_model(),

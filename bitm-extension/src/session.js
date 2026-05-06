@@ -1,5 +1,5 @@
 /*
- * BitM Shield — session.js
+ * BitM-LLM Shield — session.js
  *
  * Traccia in sessionStorage la sequenza di pagine visitate + timing, così
  * da poterla spedire al backend /api/bitm/collect in mode=hybrid. Formato

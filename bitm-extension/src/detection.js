@@ -1,5 +1,5 @@
 /*
- * BitM Shield — detection.js
+ * BitM-LLM Shield — detection.js
  *
  * Porting in JavaScript delle regole di extractor._detect_bitm.
  * Le regex e i pesi sono allineati con bitm-plugin/app/extractor.py: se qui

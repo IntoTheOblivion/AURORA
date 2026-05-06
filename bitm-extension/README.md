@@ -1,4 +1,4 @@
-# BitM Shield — browser extension
+# BitM-LLM Shield — browser extension
 
 Estensione MV3 (Chrome/Edge/Brave) che rileva attacchi Browser-in-the-Middle
 direttamente nel browser. **v0.2.0** introduce integrazione opzionale con il

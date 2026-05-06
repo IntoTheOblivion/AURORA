@@ -118,7 +118,7 @@ def _fmt_siem(event: dict[str, Any]) -> dict[str, Any]:
     """
     return {
         "event_type":   "BLOCK",
-        "product":      "BitM Detection Plugin",
+        "product":      "BitM-LLM Shield",
         "version":      "6.2",
         "timestamp":    event.get("ts"),
         "severity":     "HIGH",

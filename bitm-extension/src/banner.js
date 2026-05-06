@@ -1,5 +1,5 @@
 /*
- * BitM Shield — banner.js
+ * BitM-LLM Shield — banner.js
  *
  * Banner condiviso (Shadow DOM mode:closed) per mostrare verdict + spiegazione
  * utente-friendly. Estratto da content-script.js v0.1.0, allineato a
@@ -88,7 +88,7 @@
         "</style>" +
         "<div class='b' role='alert' aria-live='assertive'>" +
         "<div class='t'>" +
-        "<strong>BitM Shield — " + esc(title) + "</strong>" +
+        "<strong>BitM-LLM Shield — " + esc(title) + "</strong>" +
         "<div class='body'>" + esc(body) + "</div>" +
         (subtitle ? "<div class='body' style='margin-top:4px'>" + esc(subtitle) + "</div>" : "") +
         "<div class='meta'>" + esc((opts.signals || []).slice(0, 3).join(", ")) +

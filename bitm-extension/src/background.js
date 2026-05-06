@@ -1,5 +1,5 @@
 /*
- * BitM Shield — background.js (service worker, MV3)
+ * BitM-LLM Shield — background.js (service worker, MV3)
  *
  * Tiene lo stato per-tab in memoria, gestisce il badge, il ring buffer
  * history (chrome.storage.local), e — in mode=hybrid — inoltra il verdict
@@ -78,10 +78,10 @@ function applyBadge(tabId, verdict) {
     chrome.action.setBadgeText({ tabId, text: b.text });
     chrome.action.setBadgeBackgroundColor({ tabId, color: b.color });
     const title = verdict === "allow"
-      ? chrome.i18n.getMessage("badge_title_allow")     || "BitM Shield — pagina pulita"
+      ? chrome.i18n.getMessage("badge_title_allow")     || "BitM-LLM Shield — pagina pulita"
       : verdict === "challenge"
-      ? chrome.i18n.getMessage("badge_title_challenge") || "BitM Shield — segnali sospetti"
-      : chrome.i18n.getMessage("badge_title_block")     || "BitM Shield — BLOCCO: rilevato BitM";
+      ? chrome.i18n.getMessage("badge_title_challenge") || "BitM-LLM Shield — segnali sospetti"
+      : chrome.i18n.getMessage("badge_title_block")     || "BitM-LLM Shield — BLOCCO: rilevato BitM";
     chrome.action.setTitle({ tabId, title });
   } catch (_) { /* tab chiusa */ }
 }

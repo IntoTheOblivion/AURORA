@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repository layout
+
+- `bitm-plugin/` — the FastAPI detection service (the only thing that runs in production). All backend commands run from here.
+- `bitm-extension/` — Chrome Manifest V3 extension ("BitM-LLM Shield") that acts as the browser-side collector and shows the block/challenge banner. Loads `src/page-hook.js` in MAIN world at `document_start`, plus a chain of isolated content scripts (`settings → detection → session → banner → content-script`).
+- `tesi/` — thesis material (Italian, University of Bari): `genera_tesi.py` builds `tesi_BitM_LLM.docx` from `Template_Tesi.docx` and the `tesi_figures/*.png` it produces. `tesi/doc/` holds the reference papers. Run with `python tesi/genera_tesi.py`; output is always written next to the script regardless of CWD.
+- `docker-compose.yml` (root) — profiles `api`, `redis`, `ollama` for the full stack.
+
 ## Commands
 
 All commands run from `bitm-plugin/`.
@@ -16,7 +23,7 @@ python run.py
 # Diagnose the configured LLM backend (Anthropic or Ollama) end-to-end
 python diagnose.py
 
-# Full test suite (27 cases across legit/attack/suspicious/edge/system)
+# Full test suite (49 cases across legit/attack/suspicious/edge/system)
 python tests/run_tests.py
 
 # Subset runs
@@ -24,10 +31,10 @@ python tests/run_tests.py --filter attack              # one or more categories
 python tests/run_tests.py --filter legit,suspicious
 python tests/run_tests.py --only T06,T11               # specific case IDs
 python tests/run_tests.py --parallel 4                 # concurrent workers
-python tests/run_tests.py --skip-system                # skip v6 system checks (S01–S07)
+python tests/run_tests.py --skip-system                # skip system checks (S01–S20)
 ```
 
-The test runner assumes the API is already running on `http://localhost:8000` and writes `test_report.json` at the end. It exits non-zero if any case fails. System checks (S01–S07) exercise `/health`, session persistence, IP-block escalation (3 consecutive blocks → IP banned), rate limiting, GeoIP, admin endpoints, and LLM cache.
+The test runner assumes the API is already running on `http://localhost:8000` and writes `test_report.json` at the end. It exits non-zero if any case fails. System checks (S01–S20) exercise `/health`, session persistence, IP-block escalation (3 consecutive blocks → IP banned), rate limiting, GeoIP, admin endpoints, LLM cache, webhook delivery, and several v7-era invariants.
 
 ## Environment
 
@@ -81,12 +88,12 @@ Resolver is a lazy singleton holding open MaxMind readers. `is_vpn` is inferred 
 
 ### Versioning
 
-Version string lives in three places that must stay in sync: `FastAPI(version=...)` and the `/health` payload in `app/main.py`, plus the README. The test suite's S01 asserts `/health` exposes `version` starting with `6.`.
+Version string lives in three places that must stay in sync: `FastAPI(version=...)` and the `/health` payload in `app/main.py`, plus the README. Current version is `7.4.2`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
 
 ### Logging
 
-Every request ends with `log_event(...)` appending a JSON line to `bitm-plugin/bitm_events.jsonl`. This file is checked into the repo — don't treat it as generated output to delete, but also don't grow it as part of normal edits. `log_event` also returns the entry dict so `main.py` can hand the same payload to the WebSocket broadcaster.
+Every request ends with `log_event(...)` appending a JSON line to `bitm-plugin/bitm_events.jsonl`. The file is gitignored (it grows on every request and creates merge noise), but it is the source of truth for offline analysis and feeds the dashboard's backlog. `log_event` also returns the entry dict so `main.py` can hand the same payload to the WebSocket broadcaster.
 
-### Real-time dashboard (v6.1)
+### Real-time dashboard
 
 `app/broadcaster.py` is an in-process pub/sub: the `EventBroadcaster` singleton holds a set of connected `/ws/events` clients plus a 500-slot ring buffer. New WebSocket clients receive the ring as a `{"type":"backlog"}` frame so the dashboard doesn't start empty; every subsequent `/api/bitm/collect` produces one `{"type":"event"}` frame. It is **single-worker only** — running uvicorn with `--workers > 1` would give each worker its own broadcaster; promote the transport to Redis pub/sub if that's needed. The dashboard itself is plain HTML/JS at `app/static/dashboard.html`, served at `/dashboard`, using Chart.js from CDN and generating CSV client-side from its in-memory event buffer.

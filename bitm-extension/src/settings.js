@@ -1,5 +1,5 @@
 /*
- * BitM Shield — settings.js
+ * BitM-LLM Shield — settings.js
  *
  * Thin wrapper su chrome.storage.local. Stesso file usato dal background
  * service worker (via importScripts) e dal popup (via <script src>).

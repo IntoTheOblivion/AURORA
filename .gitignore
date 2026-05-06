@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Environments
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project-specific
+bitm-plugin/bitm_events.jsonl
+bitm-plugin/test_report.json
+node_modules/
+*.log
+
+# Tesi — non ancora pronta per il repo
+tesi/
+
+# Sandbox locale di test attacco BitM (non versionato)
+bitm-attack-sandbox/
