@@ -1,5 +1,5 @@
 {
-  "input": "bitm_events.jsonl",
+  "input": "aurora_events.jsonl",
   "lines_read": 511,
   "skipped": {
     "filtered": 306,

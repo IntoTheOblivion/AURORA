@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — settings.js
+ * AURORA — settings.js
  *
  * Thin wrapper su chrome.storage.local. Stesso file usato dal background
  * service worker (via importScripts) e dal popup (via <script src>).
@@ -8,7 +8,7 @@
 (function (global) {
   "use strict";
 
-  var KEY = "bitm-settings";
+  var KEY = "aurora-settings";
 
   var DEFAULTS = {
     mode: "local",                 // off | local | hybrid

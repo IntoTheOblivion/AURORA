@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Path del log: risolto relativo alla radice del progetto (parent del pacchetto
-# `app/`), così il file finisce sempre in `bitm-plugin/bitm_events.jsonl`
+# `app/`), così il file finisce sempre in `aurora-plugin/aurora_events.jsonl`
 # indipendentemente dalla CWD dal quale uvicorn / i test vengono invocati.
-# Override esplicito via env BITM_LOG_FILE (path assoluto consigliato).
-_DEFAULT_LOG = Path(__file__).resolve().parent.parent / "bitm_events.jsonl"
-LOG_FILE = os.getenv("BITM_LOG_FILE", str(_DEFAULT_LOG))
+# Override esplicito via env AURORA_LOG_FILE (path assoluto consigliato).
+_DEFAULT_LOG = Path(__file__).resolve().parent.parent / "aurora_events.jsonl"
+LOG_FILE = os.getenv("AURORA_LOG_FILE", str(_DEFAULT_LOG))
 
 _C = {
     "allow":     "\033[32m",

@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — Collector v7.3
+ * AURORA — Collector v7.3
  *
  * Integrazione one-liner:
  *   <script src="https://<host>/collector.js"
@@ -162,7 +162,7 @@
     return result;
   }
 
-  // Banner in-page (Shadow DOM) — stesso pattern dell'estensione BitM-LLM Shield.
+  // Banner in-page (Shadow DOM) — stesso pattern dell'estensione AURORA.
   // Isolamento dallo stile del sito; sempre dismissible; non intercetta il submit
   // (il collector è lato-sito, la difesa attiva è compito dell'estensione).
   var _bannerShown = false;

@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — net-rules.js
+ * AURORA — net-rules.js
  *
  * Gestione delle regole declarativeNetRequest dinamiche. Blocca a livello
  * di rete (prima che il DOM parta) le richieste verso host di tunneling

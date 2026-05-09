@@ -4,11 +4,11 @@ on:
   push:
     branches: [master, test]
     paths:
-      - 'bitm-plugin/**'
+      - 'aurora-plugin/**'
       - '.github/workflows/e2e-playwright.yml'
   pull_request:
     paths:
-      - 'bitm-plugin/**'
+      - 'aurora-plugin/**'
       - '.github/workflows/e2e-playwright.yml'
   workflow_dispatch:
     inputs:
@@ -19,7 +19,7 @@ on:
 
 jobs:
   e2e:
-    name: BitM evasion E2E
+    name: AURORA evasion E2E
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -40,21 +40,21 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - name: Install BitM runtime deps
-        working-directory: bitm-plugin
+      - name: Install AURORA runtime deps
+        working-directory: aurora-plugin
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Install E2E deps
-        working-directory: bitm-plugin
+        working-directory: aurora-plugin
         run: pip install -r tests/e2e_playwright/requirements-e2e.txt
 
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium
 
-      - name: Start BitM API (background)
-        working-directory: bitm-plugin
+      - name: Start AURORA API (background)
+        working-directory: aurora-plugin
         run: |
           nohup python run.py > api.log 2>&1 &
           echo $! > api.pid
@@ -65,12 +65,12 @@ jobs:
             fi
             sleep 1
           done
-          echo "::error::BitM API failed to start"
+          echo "::error::AURORA API failed to start"
           tail -n 80 api.log
           exit 1
 
       - name: Run E2E Playwright suite
-        working-directory: bitm-plugin
+        working-directory: aurora-plugin
         run: |
           python tests/e2e_playwright/run_e2e.py \
             --url "http://localhost:${PORT}" \
@@ -83,13 +83,13 @@ jobs:
         with:
           name: e2e-report-v7.1
           path: |
-            bitm-plugin/tests/e2e_playwright/e2e_report.json
-            bitm-plugin/api.log
+            aurora-plugin/tests/e2e_playwright/e2e_report.json
+            aurora-plugin/api.log
           if-no-files-found: warn
 
-      - name: Stop BitM API
+      - name: Stop AURORA API
         if: always()
-        working-directory: bitm-plugin
+        working-directory: aurora-plugin
         run: |
           if [ -f api.pid ]; then
             kill "$(cat api.pid)" 2>/dev/null || true

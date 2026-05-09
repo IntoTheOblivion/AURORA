@@ -1,5 +1,5 @@
 """
-build_dataset.py — converte bitm_events.jsonl in un dataset SFT per LLaMA 3.1.
+build_dataset.py — converte aurora_events.jsonl in un dataset SFT per LLaMA 3.1.
 
 Prende i log prodotti da app/logger.py e genera un dataset in formato
 "messages" (ChatML) compatibile con trl.SFTTrainer / HuggingFace Datasets.
@@ -18,7 +18,7 @@ Output:
 
 Uso:
   python build_dataset.py \\
-      --input ../bitm_events.jsonl \\
+      --input ../aurora_events.jsonl \\
       --output-dir ./dataset \\
       --val-split 0.1
 """
@@ -140,7 +140,7 @@ def _dedupe_key(entry: dict) -> tuple:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True, help="percorso di bitm_events.jsonl")
+    ap.add_argument("--input", required=True, help="percorso di aurora_events.jsonl")
     ap.add_argument("--output-dir", required=True)
     ap.add_argument("--val-split", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=42)

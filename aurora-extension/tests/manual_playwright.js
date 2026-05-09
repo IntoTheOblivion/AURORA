@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — manual_playwright.js
+ * AURORA — manual_playwright.js
  *
  * Test manuale (non CI) che copre i 4 scenari v0.2.0:
  *   1. Locale offline (mode=local): pagina "noVNC" → block + banner IT
@@ -9,7 +9,7 @@
  *
  * Uso:
  *   1. Assicurati che il backend sia acceso per scenari 2 e 4:
- *        cd bitm-plugin && LLM_BACKEND=ollama LLM_TRAJECTORY_ANALYSIS=on python run.py
+ *        cd aurora-plugin && LLM_BACKEND=ollama LLM_TRAJECTORY_ANALYSIS=on python run.py
  *   2. Installa Playwright Chromium: `npm i -D playwright`
  *   3. Esegui: `node tests/manual_playwright.js`
  *
@@ -25,7 +25,7 @@ const { chromium } = require("playwright");
 const path = require("path");
 
 const EXT_DIR  = path.resolve(__dirname, "..");
-const BACKEND  = process.env.BITM_BACKEND || "http://localhost:8000";
+const BACKEND  = process.env.AURORA_BACKEND || "http://localhost:8000";
 
 async function launch(args = []) {
   return chromium.launchPersistentContext("", {
@@ -40,7 +40,7 @@ async function launch(args = []) {
 
 async function assertBannerPresent(page, expected = true) {
   const present = await page.evaluate(() => {
-    const h = document.getElementById("__bitm_shield_banner__");
+    const h = document.getElementById("__aurora_banner__");
     if (!h) return false;
     const r = h.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
@@ -95,7 +95,7 @@ async function scenario2_hybridPanic() {
 
 async function scenario3_hybridBackendDown() {
   console.log("\n── Scenario 3: Hybrid con backend OFFLINE ──");
-  console.log("  ⚠ Spegni il server bitm-plugin prima di eseguire questo scenario.");
+  console.log("  ⚠ Spegni il server aurora-plugin prima di eseguire questo scenario.");
   console.log("  Verifica che il banner appaia comunque (fallback locale) su pagina noVNC.");
   const ctx = await launch();
   const page = await ctx.newPage();

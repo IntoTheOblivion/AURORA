@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'bitm-plugin/**'
+      - 'aurora-plugin/**'
       - '.github/workflows/docker-publish.yml'
     tags: ['v*']
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./bitm-plugin
+          context: ./aurora-plugin
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -1,8 +1,8 @@
 /*
- * BitM-LLM Shield — detection.js
+ * AURORA — detection.js
  *
  * Porting in JavaScript delle regole di extractor._detect_bitm.
- * Le regex e i pesi sono allineati con bitm-plugin/app/extractor.py: se qui
+ * Le regex e i pesi sono allineati con aurora-plugin/app/extractor.py: se qui
  * cambi un pattern, aggiorna anche il lato Python (e viceversa).
  */
 (function () {

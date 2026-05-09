@@ -43,7 +43,7 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("bitm.notifier")
+logger = logging.getLogger("aurora.notifier")
 
 
 # ── Configurazione ─────────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ def _fmt_siem(event: dict[str, Any]) -> dict[str, Any]:
     """
     return {
         "event_type":   "BLOCK",
-        "product":      "BitM-LLM Shield",
+        "product":      "AURORA",
         "version":      "6.2",
         "timestamp":    event.get("ts"),
         "severity":     "HIGH",

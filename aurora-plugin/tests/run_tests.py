@@ -1,5 +1,5 @@
 """
-BitM-LLM Shield — Test Suite v7.3
+AURORA — Test Suite v7.3
 
 Copertura:
   • legit      → browser reali in vari contesti
@@ -1306,7 +1306,7 @@ def print_report(cases: list, systems: list) -> dict:
         by_cat.setdefault(r["cat"], []).append(r)
 
     print(f"\n{B}{'='*72}{X}")
-    print(f"{B}  BitM-LLM Shield v7.3 — Test Suite{X}")
+    print(f"{B}  AURORA v7.3 — Test Suite{X}")
     print(f"{'='*72}")
 
     for cat in ("legit", "attack", "suspicious", "edge"):

@@ -193,7 +193,7 @@ async def test_ollama():
 async def main():
     backend = os.getenv("LLM_BACKEND", "anthropic").lower()
     print(f"\n{B}{'='*52}{X}")
-    print(f"{B}  BitM-LLM Shield — Diagnostica{X}")
+    print(f"{B}  AURORA — Diagnostica{X}")
     print(f"{B}{'='*52}{X}")
     print(f"  LLM_BACKEND configurato: {B}{backend}{X}")
 

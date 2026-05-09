@@ -1,4 +1,4 @@
-# BitM-LLM Shield — docker-compose one-shot
+# AURORA — docker-compose one-shot
 #
 # Usage:
 #   docker compose up                                       # solo api (backend stub, zero-config)
@@ -20,7 +20,7 @@
 
 x-ollama-base: &ollama-base
   image: ollama/ollama:latest
-  container_name: bitm-ollama
+  container_name: aurora-ollama
   ports:
     - "11434:11434"
   volumes:
@@ -30,9 +30,9 @@ x-ollama-base: &ollama-base
 services:
   api:
     build:
-      context: ./bitm-plugin
-    image: bitm-llm:local
-    container_name: bitm-api
+      context: ./aurora-plugin
+    image: aurora:local
+    container_name: aurora-api
     ports:
       - "8000:8000"
     environment:
@@ -49,7 +49,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: bitm-redis
+    container_name: aurora-redis
     profiles: ["redis"]
     ports:
       - "6379:6379"

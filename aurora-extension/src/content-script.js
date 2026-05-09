@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — content-script.js
+ * AURORA — content-script.js
  *
  * Gira in ISOLATED world, a document_start. Riceve via postMessage i segnali
  * grezzi raccolti da page-hook.js (MAIN world), applica BitMDetection.detect,

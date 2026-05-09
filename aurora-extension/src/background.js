@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — background.js (service worker, MV3)
+ * AURORA — background.js (service worker, MV3)
  *
  * Tiene lo stato per-tab in memoria, gestisce il badge, il ring buffer
  * history (chrome.storage.local), e — in mode=hybrid — inoltra il verdict
@@ -12,7 +12,7 @@ try {
   // classic SW (non module): carica deps sincronamente all'avvio.
   importScripts("./settings.js", "./net-rules.js");
 } catch (e) {
-  console.error("[BitM] importScripts failed", e);
+  console.error("[AURORA] importScripts failed", e);
 }
 
 // ── Stato per-tab ───────────────────────────────────────────────────────────
@@ -25,9 +25,9 @@ try {
 const state = new Map(); // tabId → verdict payload (cache)
 // Esposto su self per permettere test E2E (tests/e2e_hybrid.js) di leggere
 // lo stato via serviceWorker.evaluate. Non usato dal runtime dell'estensione.
-self.__bitmState = state;
-const SESSION_STATE_KEY = "bitm-tab-state";
-const HISTORY_KEY = "bitm-history";
+self.__auroraState = state;
+const SESSION_STATE_KEY = "aurora-tab-state";
+const HISTORY_KEY = "aurora-history";
 const HISTORY_MAX = 50;
 const RANK = { allow: 0, challenge: 1, block: 2 };
 
@@ -78,10 +78,10 @@ function applyBadge(tabId, verdict) {
     chrome.action.setBadgeText({ tabId, text: b.text });
     chrome.action.setBadgeBackgroundColor({ tabId, color: b.color });
     const title = verdict === "allow"
-      ? chrome.i18n.getMessage("badge_title_allow")     || "BitM-LLM Shield — pagina pulita"
+      ? chrome.i18n.getMessage("badge_title_allow")     || "AURORA — pagina pulita"
       : verdict === "challenge"
-      ? chrome.i18n.getMessage("badge_title_challenge") || "BitM-LLM Shield — segnali sospetti"
-      : chrome.i18n.getMessage("badge_title_block")     || "BitM-LLM Shield — BLOCCO: rilevato BitM";
+      ? chrome.i18n.getMessage("badge_title_challenge") || "AURORA — segnali sospetti"
+      : chrome.i18n.getMessage("badge_title_block")     || "AURORA — BLOCCO: rilevato BitM";
     chrome.action.setTitle({ tabId, title });
   } catch (_) { /* tab chiusa */ }
 }

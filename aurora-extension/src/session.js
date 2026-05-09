@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — session.js
+ * AURORA — session.js
  *
  * Traccia in sessionStorage la sequenza di pagine visitate + timing, così
  * da poterla spedire al backend /api/bitm/collect in mode=hybrid. Formato
@@ -11,7 +11,7 @@
 (function (global) {
   "use strict";
 
-  var KEY = "bitm-trajectory";
+  var KEY = "aurora-trajectory";
   var MAX_PAGES = 40;
   var KEEP_LAST = 20;
 

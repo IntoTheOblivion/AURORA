@@ -1,14 +1,14 @@
 /*
- * BitM-LLM Shield — banner.js
+ * AURORA — banner.js
  *
  * Banner condiviso (Shadow DOM mode:closed) per mostrare verdict + spiegazione
  * utente-friendly. Estratto da content-script.js v0.1.0, allineato a
- * bitm-plugin/app/static/collector.js per coerenza UX.
+ * aurora-plugin/app/static/collector.js per coerenza UX.
  */
 (function (global) {
   "use strict";
 
-  var HOST_ID = "__bitm_shield_banner__";
+  var HOST_ID = "__aurora_banner__";
 
   var PALETTE = {
     block:     { bg: "#c0392b", titleKey: "banner_block_title",    fallbackTitle: "Richiesta bloccata" },
@@ -88,7 +88,7 @@
         "</style>" +
         "<div class='b' role='alert' aria-live='assertive'>" +
         "<div class='t'>" +
-        "<strong>BitM-LLM Shield — " + esc(title) + "</strong>" +
+        "<strong>AURORA — " + esc(title) + "</strong>" +
         "<div class='body'>" + esc(body) + "</div>" +
         (subtitle ? "<div class='body' style='margin-top:4px'>" + esc(subtitle) + "</div>" : "") +
         "<div class='meta'>" + esc((opts.signals || []).slice(0, 3).join(", ")) +

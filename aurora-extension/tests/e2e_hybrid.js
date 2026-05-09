@@ -1,5 +1,5 @@
 /*
- * BitM-LLM Shield — e2e_hybrid.js
+ * AURORA — e2e_hybrid.js
  *
  * Test E2E automatico del flusso hybrid extension ↔ backend v7.4.
  * Verifica su 3 canali indipendenti che una traiettoria login → change-password
@@ -20,7 +20,7 @@
  *   (d) mergeVerdicts preserva pattern + source hybrid + remoteOnline
  *
  * Prerequisiti:
- *   - bitm-plugin up su BITM_BACKEND (default http://localhost:8000) con
+ *   - aurora-plugin up su AURORA_BACKEND (default http://localhost:8000) con
  *     LLM_BACKEND=stub e LLM_TRAJECTORY_ANALYSIS=on (altrimenti il test degrada
  *     ad "accetto qualsiasi pattern non vuoto").
  *   - npm i -D playwright && npx playwright install chromium
@@ -31,7 +31,7 @@ const { chromium } = require("playwright");
 const path = require("path");
 
 const EXT_DIR = path.resolve(__dirname, "..");
-const BACKEND = (process.env.BITM_BACKEND || "http://localhost:8000").replace(/\/+$/, "");
+const BACKEND = (process.env.AURORA_BACKEND || "http://localhost:8000").replace(/\/+$/, "");
 const SESSION_ID = "e2e-hybrid-" + Date.now();
 const STUB_PAGES = ["/login", "/account/verify", "/account/change-password"];
 
@@ -72,13 +72,13 @@ async function waitForServiceWorker(context, timeoutMs) {
 
 async function seedSettings(sw, settings) {
   await sw.evaluate(async (s) => {
-    await chrome.storage.local.set({ "bitm-settings": s });
+    await chrome.storage.local.set({ "aurora-settings": s });
   }, settings);
 }
 
 async function readSwVerdict(sw) {
   return await sw.evaluate(async () => {
-    const m = self.__bitmState;
+    const m = self.__auroraState;
     if (!m) return { error: "state_not_exposed" };
     const tabs = await chrome.tabs.query({});
     for (const t of tabs) {
@@ -99,7 +99,7 @@ async function readSwVerdict(sw) {
 
 async function assertBannerPresent(page) {
   return await page.evaluate(() => {
-    const h = document.getElementById("__bitm_shield_banner__");
+    const h = document.getElementById("__aurora_banner__");
     if (!h) return false;
     const r = h.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
@@ -116,7 +116,7 @@ function fail(n, msg) { console.error("  ✗ assert " + n + ": " + msg); }
 
   const health = await httpJson(BACKEND + "/health").catch(() => ({ ok: false }));
   if (!health.ok) {
-    console.error("✗ backend non raggiungibile. Avvia bitm-plugin prima.");
+    console.error("✗ backend non raggiungibile. Avvia aurora-plugin prima.");
     process.exit(2);
   }
   const stubMode = health.body && health.body.backend === "stub";

@@ -1,8 +1,8 @@
-# BitM-LLM Shield — browser extension
+# AURORA — browser extension
 
 Estensione MV3 (Chrome/Edge/Brave) che rileva attacchi Browser-in-the-Middle
 direttamente nel browser. **v0.2.0** introduce integrazione opzionale con il
-backend `bitm-plugin/` per ottenere spiegazioni in italiano generate da LLM,
+backend `aurora-plugin/` per ottenere spiegazioni in italiano generate da LLM,
 trajectory patterns e blocklist di rete a livello `declarativeNetRequest`.
 
 ## Installazione (dev)
@@ -65,7 +65,7 @@ del client-side di una BitM stack basata su noVNC/Guacamole.
 ## Soglie per contesto
 
 `src/detection.js` non usa più una sola coppia `(challenge, block)` ma replica
-la tabella di `bitm-plugin/app/policy.py`:
+la tabella di `aurora-plugin/app/policy.py`:
 
 | Contesto  | Match path                                          | Challenge | Block |
 |-----------|------------------------------------------------------|-----------|-------|
@@ -93,7 +93,7 @@ host `*.ngrok.*`). L'intercettazione usa un `Proxy(Native, {construct})`:
 ## Struttura file
 
 ```
-bitm-extension/
+aurora-extension/
 ├── manifest.json           — MV3 manifest (icons, action.default_icon)
 ├── icons/
 │   ├── icon-16.png · icon-32.png · icon-48.png · icon-128.png
@@ -125,12 +125,12 @@ bitm-extension/
   `sessionId` (UUID locale), `userAgent`, `page` (path), fingerprint browser
   (plugin list, WebGL renderer, canvas prefix, lingue, timezone, risoluzione).
   Nessun cookie, nessuna credenziale, nessun body di form. Vedi
-  `bitm-plugin/.env.example` per i TTL lato server.
+  `aurora-plugin/.env.example` per i TTL lato server.
 
 ## Verifica
 
 ```bash
-cd bitm-extension
+cd aurora-extension
 node tests/manual_playwright.js           # tutti i 4 scenari
 node tests/manual_playwright.js 1         # solo scenario N
 ```
@@ -148,11 +148,11 @@ canali indipendenti (backend sessions, SW state, banner nel DOM).
 
 ```bash
 # shell 1: backend in stub mode (deterministico)
-cd bitm-plugin
+cd aurora-plugin
 LLM_BACKEND=stub LLM_TRAJECTORY_ANALYSIS=on python run.py
 
 # shell 2: test
-cd bitm-extension
+cd aurora-extension
 node tests/e2e_hybrid.js
 # atteso: 3× "✓ assert N" e "EXIT 0 — hybrid e2e OK"
 ```

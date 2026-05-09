@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<title>BitM-LLM Shield — Dashboard real-time</title>
+<title>AURORA — Dashboard real-time</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,7 +61,7 @@
 </head>
 <body>
 
-<h1>BitM-LLM Shield — Dashboard real-time</h1>
+<h1>AURORA — Dashboard real-time</h1>
 <div class="sub">
   <span class="status"><span class="dot" id="ws-dot"></span><span id="ws-label">disconnesso</span></span>
   &nbsp;·&nbsp; eventi ricevuti: <span id="total-count">0</span>
@@ -325,7 +325,7 @@ document.getElementById("btn-export").onclick = () => {
   const a    = document.createElement("a");
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   a.href = url;
-  a.download = `bitm-events-${stamp}.csv`;
+  a.download = `aurora-events-${stamp}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 };

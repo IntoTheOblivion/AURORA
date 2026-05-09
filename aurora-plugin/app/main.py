@@ -1,5 +1,5 @@
 """
-BitM-LLM Shield — FastAPI server v6.2
+AURORA — FastAPI server v6.2
 
 Novità v6:
 - Sessioni persistenti su Redis (SessionStore), condivisibili tra processi/istanze
@@ -54,12 +54,12 @@ async def lifespan(app: FastAPI):
     if errors:
         for e in errors:
             print(f"[config] ERRORE: {e}")
-    print(f"[bitm] Backend LLM: {config_summary()}")
+    print(f"[aurora] Backend LLM: {config_summary()}")
     await _store.connect()
-    print(f"[bitm] Session store: {_store.backend}")
-    print(f"[bitm] GeoIP: {geoip_summary()}")
+    print(f"[aurora] Session store: {_store.backend}")
+    print(f"[aurora] GeoIP: {geoip_summary()}")
     if not ADMIN_TOKEN:
-        print("[bitm] [!] ADMIN_TOKEN non impostato: endpoint admin/dashboard "
+        print("[aurora] [!] ADMIN_TOKEN non impostato: endpoint admin/dashboard "
               "/ws/events accessibili senza autenticazione")
     try:
         yield
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
         await _store.close()
 
 
-app = FastAPI(title="BitM-LLM Shield", version="7.4.2", lifespan=lifespan)
+app = FastAPI(title="AURORA", version="7.4.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,7 +143,7 @@ async def collector():
 async def health():
     return {
         "status":              "ok",
-        "service":             "BitM-LLM Shield",
+        "service":             "AURORA",
         "version":             "7.4.2",
         "backend":             LLM_BACKEND,
         "model":               get_selected_model(),
