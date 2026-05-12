@@ -1,14 +1,8 @@
 """
-AURORA — FastAPI server v6.2
+AURORA — FastAPI server.
 
-Novità v6:
-- Sessioni persistenti su Redis (SessionStore), condivisibili tra processi/istanze
-- Arricchimento automatico della Request con metadati GeoIP (Country/ASN/ISP)
-- Rimossa la gestione manuale di ip_meta dal payload client
-
-Novità v6.2:
-- Modulo notifier: webhook push asincrono per eventi BLOCK
-  (Slack Blocks API, Microsoft Teams Adaptive Cards, SIEM JSON)
+La versione esposta a runtime (/health, FastAPI(version=...), payload SIEM) è
+centralizzata in `app/__version__`. Modificare lì per bumpare in un solo posto.
 """
 
 import asyncio
@@ -21,6 +15,7 @@ from fastapi import Depends, FastAPI, Request, HTTPException, WebSocket, WebSock
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import __version__ as AURORA_VERSION
 from app.config import (
     ADMIN_TOKEN,
     LLM_BACKEND,
@@ -67,7 +62,7 @@ async def lifespan(app: FastAPI):
         await _store.close()
 
 
-app = FastAPI(title="AURORA", version="7.4.2", lifespan=lifespan)
+app = FastAPI(title="AURORA", version=AURORA_VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -144,7 +139,7 @@ async def health():
     return {
         "status":              "ok",
         "service":             "AURORA",
-        "version":             "7.4.2",
+        "version":             AURORA_VERSION,
         "backend":             LLM_BACKEND,
         "model":               get_selected_model(),
         "trajectory_analysis": LLM_TRAJECTORY_ANALYSIS,

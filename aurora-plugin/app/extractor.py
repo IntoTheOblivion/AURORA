@@ -182,17 +182,6 @@ def _detect_headless(raw: dict, ua_lower: str,
     if screen in ("800x600", "1024x768", "0x0", ""):
         signals.append("suspicious_resolution")
 
-    # Color depth anomala. Attenzione: usare `or 24` maschera il caso
-    # colorDepth=0 (falsy) che è esattamente quello che vogliamo segnalare.
-    cd = raw.get("colorDepth")
-    if cd is None:
-        cd = 24
-    try:
-        if int(cd) < 8:
-            signals.append("low_color_depth")
-    except (TypeError, ValueError):
-        pass
-
     # Timezone mancante (browser reali hanno sempre un timezone)
     if not (raw.get("timezone") or "").strip():
         signals.append("no_timezone")

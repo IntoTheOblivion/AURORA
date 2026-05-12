@@ -43,6 +43,8 @@ from typing import Any
 
 import httpx
 
+from app import __version__ as AURORA_VERSION
+
 logger = logging.getLogger("aurora.notifier")
 
 
@@ -119,7 +121,7 @@ def _fmt_siem(event: dict[str, Any]) -> dict[str, Any]:
     return {
         "event_type":   "BLOCK",
         "product":      "AURORA",
-        "version":      "6.2",
+        "version":      AURORA_VERSION,
         "timestamp":    event.get("ts"),
         "severity":     "HIGH",
         "source_ip":    event.get("ip"),
