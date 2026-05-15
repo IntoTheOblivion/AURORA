@@ -19,9 +19,9 @@ COPY app/ ./app/
 COPY run.py ./
 
 # Utente non-root
-RUN useradd --create-home --shell /sbin/nologin bitm \
- && chown -R bitm:bitm /app
-USER bitm
+RUN useradd --create-home --shell /sbin/nologin aurora \
+ && chown -R aurora:aurora /app
+USER aurora
 
 EXPOSE 8000
 

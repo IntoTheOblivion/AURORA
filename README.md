@@ -1193,7 +1193,7 @@ Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici princi
 
 ### File aggiunti
 
-- `aurora-plugin/Dockerfile` — `python:3.13-slim`, utente non-root `bitm`, healthcheck integrato su `/health`, `CMD` diretto a `uvicorn` (no `--reload`)
+- `aurora-plugin/Dockerfile` — `python:3.13-slim`, utente non-root `aurora`, healthcheck integrato su `/health`, `CMD` diretto a `uvicorn` (no `--reload`)
 - `aurora-plugin/.dockerignore` — esclude `__pycache__/`, `.env`, `tests/`, `doc/`, `aurora_events.jsonl`, artefatti IDE
 - `docker-compose.yml` (root) — servizio `api` di default + profili opzionali `redis` e `ollama`
 - `aurora-plugin/app/static/collector.js` — collector vanilla JS (~140 righe, nessuna dipendenza), legge `data-endpoint`/`data-page`/`data-auto` dal tag `<script>`, espone `window.BitM`
