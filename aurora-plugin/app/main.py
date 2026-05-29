@@ -123,12 +123,15 @@ async def collector():
     """
     Collector JS standalone per integrazione one-liner.
     Esposto con MIME JS e cache pubblica (1h) per permettere il caching a CDN/proxy.
+    Il placeholder __AURORA_VERSION__ viene sostituito con AURORA_VERSION lato server
+    così `window.BitM.version` resta allineato alla versione centralizzata.
     """
     p = STATIC_DIR / "collector.js"
     if not p.exists():
         raise HTTPException(404, detail="collector.js non trovato")
+    body = p.read_text(encoding="utf-8").replace("__AURORA_VERSION__", AURORA_VERSION)
     return Response(
-        content=p.read_text(encoding="utf-8"),
+        content=body,
         media_type="application/javascript",
         headers={"Cache-Control": "public, max-age=3600"},
     )

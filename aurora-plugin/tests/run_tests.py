@@ -475,13 +475,11 @@ CASES: list[dict] = [
 #   TEST RUNNER per scenari
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def run_case(client: httpx.AsyncClient, case: dict, base: str,
-                   extra_headers: dict | None = None) -> dict:
+async def run_case(client: httpx.AsyncClient, case: dict, base: str) -> dict:
     t0 = time.time()
     try:
         r    = await client.post(f"{base}/api/bitm/collect",
-                                 json=case["payload"], timeout=60,
-                                 headers=extra_headers or {})
+                                 json=case["payload"], timeout=60)
         data = r.json()
         ms   = round((time.time() - t0) * 1000)
         got  = data.get("action", "?")
@@ -1439,10 +1437,20 @@ async def main():
             batch_safe     = [c for c in cases if c["cat"] not in blocking_cats]
 
             res_blocking = await asyncio.gather(*[_guarded(c) for c in batch_blocking])
+            # Reset stato tra batch: se fallisce, i SUSPICIOUS/EDGE ereditano
+            # l'IP-ban della batch precedente e produrrebbero falsi negativi.
+            # httpx non solleva su 4xx, quindi controlliamo lo status esplicitamente.
             try:
-                await client.delete(f"{base}/api/bitm/sessions", timeout=10)
-            except Exception:
-                pass
+                _rst = await client.delete(f"{base}/api/bitm/sessions", timeout=10)
+            except Exception as e:
+                print(f"{R}✗ Cleanup tra batch fallito ({e}). "
+                      f"I risultati SUSPICIOUS/EDGE non sarebbero affidabili.{X}")
+                sys.exit(2)
+            if _rst.status_code >= 400:
+                print(f"{R}✗ Cleanup tra batch HTTP {_rst.status_code}. "
+                      f"Passa --admin-token (o setta BITM_ADMIN_TOKEN) "
+                      f"se il server richiede autenticazione admin.{X}")
+                sys.exit(2)
             res_safe = await asyncio.gather(*[_guarded(c) for c in batch_safe])
 
             # Ricompone i risultati nell'ordine originale dei casi

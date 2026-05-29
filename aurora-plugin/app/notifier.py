@@ -160,7 +160,7 @@ def _fmt_slack(event: dict[str, Any]) -> dict[str, Any]:
     color = "#E53935"  # rosso per BLOCK
 
     return {
-        "text": f":rotating_light: BitM BLOCK — IP {ip}  score={score:.3f}",
+        "text": f":rotating_light: AURORA BLOCK — IP {ip}  score={score:.3f}",
         "attachments": [
             {
                 "color": color,
@@ -169,7 +169,7 @@ def _fmt_slack(event: dict[str, Any]) -> dict[str, Any]:
                         "type": "header",
                         "text": {
                             "type": "plain_text",
-                            "text": ":rotating_light: BitM Detection — BLOCK Alert",
+                            "text": ":rotating_light: AURORA — BLOCK Alert",
                             "emoji": True,
                         },
                     },
@@ -243,7 +243,7 @@ def _fmt_teams(event: dict[str, Any]) -> dict[str, Any]:
             "size":   "Large",
             "weight": "Bolder",
             "color":  "Attention",
-            "text":   "🚨 BitM Detection — BLOCK Alert",
+            "text":   "🚨 AURORA — BLOCK Alert",
         },
         {
             "type":  "FactSet",

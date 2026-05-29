@@ -104,7 +104,7 @@ OLLAMA_TIMEOUT: int = int(os.getenv("OLLAMA_TIMEOUT", "60"))
 # ── Redis ─────────────────────────────────────────────────────────────────────
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_SESSION_TTL: int = int(os.getenv("REDIS_SESSION_TTL", "3600"))
-REDIS_KEY_PREFIX: str = os.getenv("REDIS_KEY_PREFIX", "bitm:")
+REDIS_KEY_PREFIX: str = os.getenv("REDIS_KEY_PREFIX", "aurora:")
 
 # ── Webhook push notifications (v6.2) ─────────────────────────────────────────
 WEBHOOK_URL: str         = os.getenv("WEBHOOK_URL", "").strip()

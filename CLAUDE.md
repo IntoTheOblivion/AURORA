@@ -88,7 +88,7 @@ Resolver is a lazy singleton holding open MaxMind readers. `is_vpn` is inferred 
 
 ### Versioning
 
-Version string lives in three places that must stay in sync: `FastAPI(version=...)` and the `/health` payload in `app/main.py`, plus the README. Current version is `7.4.2`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
+The runtime version string is centralized in `app/__init__.py` (`__version__`) and imported as `AURORA_VERSION` by `app/main.py`. From there it drives `FastAPI(version=...)`, the `/health` payload, the SIEM webhook payload in `app/notifier.py`, and `window.BitM.version` (the `/collector.js` handler substitutes a `__AURORA_VERSION__` placeholder at serve time). The README still carries the version literally — keep it in sync manually when you bump. Current version is `7.4.2`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
 
 ### Logging
 

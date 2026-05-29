@@ -43,7 +43,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
 - [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
 - [Analisi LLM della traiettoria (v7.4)](#-analisi-llm-della-traiettoria-v74)
-- [Estensione browser AURORA (v0.1)](#-estensione-browser-aurora-shield-v01)
+- [Estensione browser AURORA (v0.1)](#-estensione-browser-aurora-v01)
 - [Changelog](#-changelog)
 
 ---
@@ -102,7 +102,7 @@ Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), 
 2. Attiva "Modalità sviluppatore" in alto a destra
 3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `aurora-extension/`
 
-L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora-shield-v01) per il dettaglio.
+L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora-v01) per il dettaglio.
 
 ---
 
@@ -443,7 +443,7 @@ Lo script prova a connettersi al backend LLM configurato e stampa un report (mod
 
 L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcuna chiamata di rete verso il server BitM.
 
-**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora-shield-v01)).
+**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora-v01)).
 
 #### C.1 — Installazione in modalità sviluppatore
 

@@ -2,7 +2,7 @@
  * AURORA — popup.js (v0.2.0)
  *
  * Tab Status: verdict + spiegazione (da hybrid se disponibile) della tab attiva.
- * Tab History: ring buffer `bitm-history` in chrome.storage.local.
+ * Tab History: ring buffer `aurora-history` in chrome.storage.local.
  * Tab Settings: mode {off, local, hybrid}, backend URL, test-connection, toggle
  * net-rules; salvataggio via chrome.storage.local.
  */
@@ -140,8 +140,8 @@
   var historyClear = document.getElementById("history-clear");
 
   async function renderHistory() {
-    var items = await chrome.storage.local.get(["bitm-history"]);
-    var list = Array.isArray(items["bitm-history"]) ? items["bitm-history"] : [];
+    var items = await chrome.storage.local.get(["aurora-history"]);
+    var list = Array.isArray(items["aurora-history"]) ? items["aurora-history"] : [];
     historyList.innerHTML = "";
     if (list.length === 0) {
       var li = document.createElement("li");
@@ -195,7 +195,7 @@
 
   if (historyClear) {
     historyClear.addEventListener("click", async function () {
-      await chrome.storage.local.set({ "bitm-history": [] });
+      await chrome.storage.local.set({ "aurora-history": [] });
       renderHistory();
     });
   }

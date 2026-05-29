@@ -219,7 +219,7 @@
     fingerprint:     fingerprint,
     onResult:        onResult,
     endpoint:        ENDPOINT,
-    version:         "7.4.2",
+    version:         "__AURORA_VERSION__",
     lastExplanation: "",
   };
 
