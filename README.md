@@ -6,7 +6,8 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 > Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`aurora-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
-> - **v0.1** (estensione) — `aurora-extension/` MV3: rilevamento locale dei 7 segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab. Zero rete, zero storage remoto
+> - **v0.2** (estensione) — `aurora-extension/` MV3: tre modalità (`off`/`local`/`hybrid`), soglie per-contesto allineate al backend, banner Shadow-DOM i18n (IT/EN), blocklist `declarativeNetRequest` per i tunnel BitM+, storico incidenti nel popup. Default `local`: zero rete, zero storage remoto
+> - **v0.1** (estensione) — prima release MV3: rilevamento locale dei segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab
 > - **v7.4.2** — Fix test suite (46/49 → 49/49): soglie latenza ricalibrate (`extreme_latency >600ms`, `high_latency >300ms`, `elevated_latency >150ms`) con etichette stabili allineate a `CRITICAL_BLOCK`/`_AMPLIFIER_WEIGHTS`, short-circuit deterministico del layer trajectory quando la sessione non contiene pattern sensibili (login/admin/change-pw/rapid-nav) → elimina ~1s di round-trip LLM su ogni sessione "noiosa" e rende la cache fingerprint davvero osservabile
 > - **v7.4.1** — Hardening sicurezza: `TRUSTED_PROXIES` per XFF, `ADMIN_TOKEN` sugli endpoint admin/WS/dashboard, fix rate-limit Redis che contava le richieste rifiutate, lifespan FastAPI, allineamento `detection.js` ↔ `extractor.py`, persistenza stato per-tab dell'estensione su `chrome.storage.session`
 > - **v7.4** — Analisi LLM della traiettoria di sessione (pattern post-compromissione) + spiegazioni utente in italiano + banner collector + colonna Pattern dashboard
@@ -43,7 +44,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
 - [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
 - [Analisi LLM della traiettoria (v7.4)](#-analisi-llm-della-traiettoria-v74)
-- [Estensione browser AURORA (v0.1)](#-estensione-browser-aurora-v01)
+- [Estensione browser AURORA (v0.2)](#-estensione-browser-aurora-v02)
 - [Changelog](#-changelog)
 
 ---
@@ -102,7 +103,7 @@ Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), 
 2. Attiva "Modalità sviluppatore" in alto a destra
 3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `aurora-extension/`
 
-L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora-v01) per il dettaglio.
+In modalità `local` (default) l'estensione gira 100% lato client: nessuna connessione al backend, nessun dato inviato in rete. La modalità `hybrid` (opt-in) può invece interrogare il backend per spiegazioni LLM. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora-v02) per il dettaglio.
 
 ---
 
@@ -158,17 +159,19 @@ HTTP POST /api/bitm/collect
 
 ### Boost contestuale
 
-In contesti `login`, `payment`, `admin`, segnali deboli amplificano lo score con pesi individuali (cappati a `MAX_BOOST = 0.25`):
+In contesti `login`, `payment`, `admin`, segnali deboli amplificano lo score con pesi individuali (somma cappata a `MAX_BOOST = 0.25`):
 
 | Segnale debole | Boost |
 |----------------|-------|
+| `tunnel_host` | +0.18 |
 | `vpn_detected` | +0.16 |
-| `timezone_anomaly` | +0.12 |
-| `swiftshader_webgl` | +0.10 |
-| `zero_plugins` | +0.09 |
-| `no_languages` / `no_webgl_renderer` | +0.08 |
-| `empty_canvas` / `suspicious_resolution` | +0.06–0.07 |
-| `no_timezone` | +0.06 |
+| `timezone_anomaly` / `high_latency` | +0.12 |
+| `swiftshader_webgl` / `iframe_overlay` | +0.10 |
+| `no_languages` | +0.08 |
+| `empty_canvas` | +0.07 |
+| `no_timezone` / `suspicious_resolution` | +0.06 |
+| `no_webgl_renderer` / `elevated_latency` | +0.05 |
+| `zero_plugins` | +0.03 |
 
 ---
 
@@ -187,11 +190,13 @@ aurora-plugin/
 │   ├── broadcaster.py   # Pub/sub in-process, ring buffer WebSocket            [v6.1]
 │   ├── notifier.py      # Webhook push asincrono per eventi BLOCK              [v6.2]
 │   ├── logger.py        # log_event() → stdout colorato + aurora_events.jsonl
+│   ├── __init__.py      # __version__ centralizzato (importato come AURORA_VERSION)
 │   └── static/
 │       ├── dashboard.html   # Dashboard real-time
+│       ├── collector.js     # Collector one-liner servito da GET /collector.js   [v7.3]
 │       └── test_page.html   # Pagina di test manuale
 ├── tests/
-│   ├── run_tests.py     # Test suite (32 casi: legit/attack/suspicious/edge/system)
+│   ├── run_tests.py     # Test suite (49 casi: legit/attack/suspicious/edge/system)
 │   └── e2e_playwright/                                                          [v7.1]
 │       ├── run_e2e.py          # Orchestratore scenari evasivi + report
 │       └── requirements-e2e.txt
@@ -443,7 +448,7 @@ Lo script prova a connettersi al backend LLM configurato e stampa un report (mod
 
 L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcuna chiamata di rete verso il server BitM.
 
-**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora-v01)).
+**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora-v02)).
 
 #### C.1 — Installazione in modalità sviluppatore
 
@@ -452,7 +457,7 @@ L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcu
 3. Clicca **Carica estensione non pacchettizzata**
 4. Seleziona la cartella `aurora-extension/` (quella che contiene `manifest.json`)
 
-L'estensione appare nella lista con il nome **AURORA** e la versione **0.1.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a AURORA) per vedere il badge per-tab.
+L'estensione appare nella lista con il nome **AURORA** e la versione **0.2.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a AURORA) per vedere il badge per-tab.
 
 #### C.2 — Verifica funzionamento
 
@@ -1059,7 +1064,7 @@ Per evitare dipendenze esterne in CI e sblocccare detection_rate significativi, 
 
 ## 🧪 Test
 
-La test suite copre **41 scenari** suddivisi in 5 categorie:
+La test suite copre **49 scenari** suddivisi in 5 categorie:
 
 | Categoria | N° | Scenari |
 |-----------|----|---------|
@@ -1067,7 +1072,7 @@ La test suite copre **41 scenari** suddivisi in 5 categorie:
 | `attack` | 13 | HeadlessChrome, Playwright+SwiftShader, Selenium, Tor, Puppeteer, latenza estrema + **T21–T27** BitM/BitM+ (noVNC title, Guacamole title, xssPayload URL, evilGet override, MalSrv port, noVNC UA leak, ngrok WS) |
 | `suspicious` | 6 | VPN+login, latenza alta+payment, VPN+canvas vuoto, timezone anomala, risoluzione sospetta, **T28 ngrok-dev+login** |
 | `edge` | 5 | Payload minimo, UA unicode, static asset, path sconosciuto, **T29 WebAuthn API nativa** |
-| `system` | 13 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field, webhook non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13 allineamento label BitM** |
+| `system` | 20 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field/non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13** allineamento label BitM, **S14–S15** collector.js + payload, **S16–S20** trajectory analysis |
 
 ### Esecuzione
 
@@ -1088,11 +1093,11 @@ python tests/run_tests.py --skip-system
 
 Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` al termine ed esce con codice `0` solo se tutti i test passano.
 
-### System check v6.2 + v7.0
+### System check (S01–S20)
 
 | ID | Verifica |
 |----|----------|
-| S01 | `/health` espone `version 6.x`, `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
+| S01 | `/health` espone `version` (major ≥ 6; runtime attuale 7.4.2), `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
 | S02 | Sessione multi-step: `request_count` cresce a ogni POST sullo stesso `sessionId` |
 | S03 | IP-block escalation: 3 BLOCK consecutivi → IP nel set bloccati permanenti |
 | S04 | Rate-limit: 40 richieste in rapida successione → almeno una `429` |
@@ -1105,6 +1110,13 @@ Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` 
 | **S11** | **`build_dataset.py` su fixture: scarta `from_cache` e `api_error`, conserva le 3 classi, emette ChatML (system/user/assistant) con target JSON valido** |
 | **S12** | **`train_lora.py --help` termina con exit 0 ed espone tutti i flag principali (`--dataset-dir`, `--base-model`, `--output-dir`, `--lora-r`, `--lora-alpha`, `--no-4bit`)** |
 | **S13** | **Label BitM/BitM+ allineati fra `extractor._detect_bitm` e `policy.CRITICAL_BLOCK` (regressione su v7.2)** |
+| **S14** | **`GET /collector.js`: risponde 200, MIME JS, e contiene `/api/bitm/collect` + `window.BitM`** |
+| **S15** | **POST di un payload collector-shaped su pagina BitM noVNC simulata → i segnali forti BitM/BitM+ scattano (contratto collector↔extractor)** |
+| **S16** | **`/health` espone `trajectory_analysis` (bool) coerente con la env var** |
+| **S17** | **Stub trajectory deterministico: stessa sequenza ripetuta 3× → stesso `trajectory_pattern`** |
+| **S18** | **`login → change-password` entro 5s → pattern famiglia `panic_password_change` + almeno `challenge`** |
+| **S19** | **`/admin` senza passare da `/login` → `direct_admin_access`** |
+| **S20** | **Sessione con una sola pagina → short-circuit `insufficient_history` senza chiamare l'LLM** |
 
 ---
 
@@ -1134,7 +1146,7 @@ Il plugin estrae 9 nuovi segnali diagnostici da campi opzionali del payload (il 
 | `webauthn_api_override` | `navigator.credentials.get.toString()` non è `[native code]` → probabile `evilGet()` (BitM+) | +0.70 | **CRITICAL → BLOCK** |
 | `bitm_websocket_transport` | WS endpoint su host tunneling, porta BE, o path `/websockify`, `/vnc`, `/guacamole` | +0.55 | **CRITICAL → BLOCK** |
 | `tunnel_host` | `pageUrl` o `referrer` su tunnel HTTPS (`*.ngrok.io`, `*.ngrok-free.app`, `*.ngrok.app`, `*.ngrok.dev`, `*.trycloudflare.com`, `*.loca.lt`, `*.localtunnel.me`, `*.serveo.net`) | +0.25 | weak — amplifica su login/payment/admin |
-| `iframe_overlay` | ≥ 3 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
+| `iframe_overlay` | ≥ 5 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
 
 ### Come arrivare alle firme dal client
 
@@ -1235,7 +1247,7 @@ La v7.4 aggiunge `analyze_trajectory` (`app/scorer.py`) — un **secondo layer L
 }
 ```
 
-Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.15`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
+Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.25`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
 
 ### Abilitazione
 
@@ -1249,7 +1261,7 @@ TRAJECTORY_CACHE_TTL=60        # cache session-keyed per evitare token-burn
 
 ### Invariante regressione-zero
 
-Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test T30–T32 + S16–S17 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
+Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test S16–S20 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
 
 ### Costo indicativo (Anthropic Haiku)
 
@@ -1272,39 +1284,47 @@ Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coni
 
 ---
 
-## 🛡 Estensione browser AURORA (v0.1)
+## 🛡 Estensione browser AURORA (v0.2)
 
-Mentre il backend server-side (`aurora-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `aurora-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere.
+Mentre il backend server-side (`aurora-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `aurora-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere. Da v0.2 l'estensione ha tre modalità — `off`, `local` (default, zero rete) e `hybrid` (opt-in: interroga il backend per spiegazioni LLM e trajectory pattern) — selezionabili dal popup → **Impostazioni**.
 
 ### Architettura
 
 ```
 aurora-extension/
-├── manifest.json              # MV3
+├── manifest.json              # MV3 (icone, action.default_icon, declarativeNetRequest)
+├── icons/                     # icon-{16,32,48,128}.png (+ _generate.py)
+├── _locales/{it,en}/messages.json   # i18n nativo Chrome (default italiano)
 └── src/
-    ├── page-hook.js           # MAIN world: hook WebSocket + credentials.get
-    ├── detection.js           # porting JS delle regole di extractor._detect_bitm
-    ├── content-script.js      # ISOLATED world: detect, banner, blocco submit
-    ├── background.js          # service worker: stato per-tab + badge toolbar
-    ├── popup.html / .css / .js
+    ├── page-hook.js           # MAIN world: Proxy su WebSocket + ispezione credentials.get
+    ├── detection.js           # porting di extractor._detect_bitm + soglie per-contesto
+    ├── session.js             # tracker pages[]+timings[] in sessionStorage
+    ├── banner.js              # banner Shadow-DOM condiviso (IT/EN)
+    ├── content-script.js      # ISOLATED world: detect → (hybrid) probe → banner, con dedup
+    ├── background.js          # service worker: merge verdict, storico, net-rules, CORS probe
+    ├── net-rules.js / .json   # regole declarativeNetRequest (dinamiche + statiche)
+    ├── settings.js            # wrapper chrome.storage.local
+    └── popup.html / .css / .js   # popup 3-tab (Stato / Storico / Impostazioni)
 ```
 
-Due script iniettati per-tab:
+Per ogni tab vengono iniettati un page-hook in MAIN world e una catena di content script in ISOLATED world (`settings → detection → session → banner → content-script`):
 
-1. **`page-hook.js`** gira nel MAIN world (stesso contesto di esecuzione dello script della pagina) — necessario per patchare `window.WebSocket` e ispezionare `navigator.credentials.get`. Non ha accesso alle API `chrome.*`.
-2. **`content-script.js`** gira nell'ISOLATED world (sandbox dell'estensione) — riceve via `window.postMessage` gli snapshot prodotti dal page-hook, applica `detection.js` e comunica i verdetti al service worker.
+1. **`page-hook.js`** gira nel MAIN world (stesso contesto di esecuzione dello script della pagina) — necessario per patchare `window.WebSocket` (via `Proxy`, anti-tamper transparent) e ispezionare `navigator.credentials.get`. Non ha accesso alle API `chrome.*`.
+2. **`content-script.js`** gira nell'ISOLATED world (sandbox dell'estensione) — riceve via `window.postMessage` gli snapshot prodotti dal page-hook, applica `detection.js`, deduplica gli snapshot ridondanti e comunica i verdetti al service worker (in `hybrid` interroga anche il backend).
 
 ### Logica di detection
 
-La funzione `BitMDetection.detect(input)` in `detection.js` è un porting fedele di `extractor._detect_bitm` + `_pre_score`: stesse regex (`TUNNEL_HOST_RE`, `NOVNC_TITLE_RE`, `GUACAMOLE_TITLE_RE`, `XSS_PAYLOAD_RE`, `BITM_PORT_RE`), stessi marker UA (`novnc/websockify/guacamole/tigervnc`), stessi pesi (`_AMPLIFIER_WEIGHTS`), stesso insieme critico (`CRITICAL_BLOCK`).
+La funzione `BitMDetection.detect(input)` in `detection.js` è un porting fedele di `extractor._detect_bitm` + `_pre_score`: stesse regex (`TUNNEL_HOST_RE`, `NOVNC_TITLE_RE`, `GUACAMOLE_TITLE_RE`, `XSS_PAYLOAD_RE`, `BITM_PORT_RE`), stessi marker UA (`novnc/websockify/guacamole/tigervnc`), stessi pesi pre-score, stesso insieme critico (`CRITICAL_BLOCK`).
 
-Le soglie per il verdetto sono fisse (non contestuali come nel server, v. §[Limitazioni](#limitazioni-note-v010)):
+Da v0.2 le soglie del verdetto **replicano la tabella per-contesto di `policy.py`** (non più una singola coppia fissa): `detection.js` mappa il path della pagina a `login`/`payment`/`admin`/`static`/`default` e confronta lo score con la coppia `(challenge, block)` corrispondente. I segnali `CRITICAL` forzano comunque `block` indipendentemente dallo score.
 
-| Output | Condizione |
-|--------|-----------|
-| `block` | almeno un segnale in `CRITICAL` **oppure** score ≥ 0.65 |
-| `challenge` | score ≥ 0.28 |
-| `allow` | altrimenti |
+| Contesto | CHALLENGE | BLOCK |
+|----------|-----------|-------|
+| `login` | ≥ 0.28 | ≥ 0.62 |
+| `payment` | ≥ 0.20 | ≥ 0.55 |
+| `admin` | ≥ 0.22 | ≥ 0.60 |
+| `default` | ≥ 0.40 | ≥ 0.75 |
+| `static` | ≥ 0.70 | ≥ 0.92 |
 
 ### Comportamento runtime
 
@@ -1313,14 +1333,16 @@ Le soglie per il verdetto sono fisse (non contestuali come nel server, v. §[Lim
 3. **Re-probe** dopo 2 s (i WS spesso si aprono post-load) via `postMessage({source:"bitm-content", cmd:"probe"})`
 4. Ogni snapshot arriva al content-script → `BitMDetection.detect(...)` → `chrome.runtime.sendMessage({type:"bitm-verdict", ...})` al background
 5. **Background** mantiene il verdetto peggiore per-tab (mai declassa), aggiorna il badge toolbar (vuoto/`!`/`X`, verde/arancio/rosso) e lo rende disponibile al popup
-6. Se il verdetto corrente è `block`, l'evento `submit` su un `<form>` che contiene un `<input type=password>` viene **preventDefault** + banner shadow-DOM in cima alla pagina
+6. Se il verdetto corrente è `block`, l'evento `submit` su un `<form>` che contiene un `<input type=password>` viene **preventDefault** + banner shadow-DOM (`banner.js`, condiviso IT/EN) in cima alla pagina
+
+> In `mode=hybrid` il content-script invia anche lo snapshot (deduplicato: una sola POST per pagina) al backend e fonde la risposta LLM (`explanation_user`, `trajectory_pattern`) col verdetto locale secondo la regola "worst wins"; se il backend è irraggiungibile resta il verdetto locale.
 
 ### Privacy
 
-- **Nessun `fetch()` o `XMLHttpRequest`** verso il backend o qualsiasi server esterno
-- **Nessun `chrome.storage`** scritto in v0.1 (lo stato vive solo in memoria, per-tab)
-- **Nessuna telemetria**: l'estensione non ha permessi `webRequest` né `cookies`
-- Permessi dichiarati in `manifest.json`: `storage` (riservato per v0.2+), `activeTab`, `host_permissions: <all_urls>` (solo per iniettare i content script, non per leggere network)
+- **`local` (default)**: nessun `fetch()`/`XMLHttpRequest` verso il backend o qualsiasi server esterno, nessuna telemetria (l'estensione non ha permessi `webRequest` né `cookies`)
+- **`hybrid` (opt-in)**: l'estensione POSTa al **solo `backendUrl` configurato** `sessionId` (UUID locale), `userAgent`, path e fingerprint browser — mai cookie, credenziali o body di form. Backend irraggiungibile → fallback silenzioso al verdetto locale
+- **Storage solo locale**: stato per-tab su `chrome.storage.session`, storico incidenti + impostazioni su `chrome.storage.local`. Nessuno storage remoto
+- Permessi dichiarati in `manifest.json`: `storage`, `activeTab`, `alarms`, `declarativeNetRequest` / `declarativeNetRequestWithHostAccess`, `host_permissions: <all_urls>`
 
 ### Testing manuale
 
@@ -1350,12 +1372,11 @@ console.log(JSON.stringify(self.BitMDetection.detect({
 # → verdict: block, score: 1, 6 segnali
 ```
 
-### Limitazioni note (v0.1.0)
+### Limitazioni note (v0.2.0)
 
-- **Nessun boost contestuale**: il server applica +0.16 VPN, +0.18 tunnel_host, ecc. sui segnali deboli quando il `context` è `login`/`payment`/`admin`. L'estensione no. Conseguenza: un attacco con solo `tunnel_host` su una login page ha score 0.25 (< 0.28) → allow. Roadmap v0.2: guardare `<input type=password>` nel DOM per inferire il contesto login e attivare il boost
+- **Nessun boost dei segnali deboli**: da v0.2 l'estensione replica le soglie per-contesto del server, ma **non** applica ancora il boost incrementale (`_AMPLIFIER_WEIGHTS`, +0.16 VPN, +0.18 tunnel_host, ecc.) dei segnali deboli su `login`/`payment`/`admin`. Conseguenza: un attacco con solo `tunnel_host` su una login page ha score 0.25 (< 0.28) → allow, dove il server arriverebbe a `challenge`
 - **Firefox non supportato**: MV3 su Firefox non ha ancora il `content_scripts.world: "MAIN"` stabile. Serve un port che usi `<script>` injection via `web_accessible_resources`
-- **Nessuna icona**: `manifest.json` non specifica `action.default_icon` → Chrome mostra un placeholder. Da aggiungere per la distribuzione store
-- **Nessuna whitelist utente**: ogni page-load riparte vergine. Roadmap v0.2: `chrome.storage.local` con "origin approvato dall'utente" per silenziare il banner su siti conosciuti
+- **Nessuna whitelist utente**: ogni page-load riparte vergine. Roadmap: `chrome.storage.local` con "origin approvato dall'utente" per silenziare il banner su siti conosciuti
 - **Nessuna difesa contro clone statico**: se un attaccante clona staticamente la login e non fa proxy, l'estensione vede un sito apparentemente normale. La difesa contro phishing statico resta responsabilità di DMARC, takedown e password manager che validano l'origin
 
 ---
@@ -1407,7 +1428,7 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 - **Lifespan context manager** (`app/main.py`): migrato da `@app.on_event("startup"/"shutdown")` deprecato a `@asynccontextmanager` — elimina il deprecation warning
 - **Config webhook lazy** (`app/notifier.py`): `_load_config()` non più a import-time; `reload_config()` per i test che cambiano env a runtime
 
-**Estensione v0.2.1 (background.js)**
+**Estensione v0.2.0 (background.js)**
 - **Persistenza stato per-tab su `chrome.storage.session`**: il service worker MV3 viene terminato dopo ~30 s idle. La vecchia `state = new Map()` si azzerava, badge e risposte al popup diventavano vuote. Ora shadow-write su `chrome.storage.session` + lazy-load su cache-miss al respawn
 - **`safeBackendUrl` normalizza all'origin**: un URL come `http://host/api` produceva `host/api/api/bitm/collect`. Ora si tiene solo `u.origin`, il path è sempre `/api/bitm/collect`
 - **`fetch()` espliciti**: `credentials: "omit"`, `cache: "no-store"` su probe + test-connection
@@ -1428,7 +1449,7 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
   - **JSONL log** (`app/logger.py`): nuovi campi `trajectory_score`, `trajectory_pattern`, `explanation_user`, `explanation_admin` nel log eventi
 - **Config** (`app/config.py`, `.env.example`): `LLM_TRAJECTORY_ANALYSIS=auto|on|off` (default `auto` → on se backend reale, off su stub per zero regressioni). `TRAJECTORY_CACHE_TTL=60` per cache session-keyed che evita token-burn su ping ripetuti
 - **Health echo** (`GET /health`): nuovo campo `trajectory_analysis: bool` coerente con la env var
-- **Test suite**: 44 → 49 casi. Aggiunti **T30 `trajectory_panic_password_change`** (login→change-password in <3s → pattern + challenge), **T31 `trajectory_direct_admin`** (accesso `/admin` senza `/login` → direct_admin_access), **T32 `trajectory_insufficient_history`** (una sola pagina → short-circuit senza chiamare LLM), **S16 `sys_trajectory_config_echo`** (`/health` coerente con env), **S17 `sys_trajectory_stub_determinism`** (stesso input → stesso pattern, CI deterministica)
+- **Test suite**: 44 → 49 casi. Aggiunti **S16 `sys_trajectory_config_echo`** (`/health` coerente con env), **S17 `sys_trajectory_stub_determinism`** (stesso input → stesso pattern, CI deterministica), **S18 `sys_trajectory_panic_password`** (login→change-password in <5s → pattern + challenge), **S19 `sys_trajectory_direct_admin`** (accesso `/admin` senza `/login` → direct_admin_access), **S20 `sys_trajectory_insufficient_history`** (una sola pagina → short-circuit senza chiamare LLM)
 
 
 
