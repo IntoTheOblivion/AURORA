@@ -1,12 +1,13 @@
-# BitM-LLM Shield
+# AURORA
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 7.4.2** (runtime) · **Estensione browser v0.2.0** (BitM-LLM Shield, MV3)
-> Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`bitm-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
+> **Versione corrente: 7.4.2** (runtime) · **Estensione browser v0.2.0** (AURORA, MV3)
+> Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`aurora-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
-> - **v0.1** (estensione) — `bitm-extension/` MV3: rilevamento locale dei 7 segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab. Zero rete, zero storage remoto
+> - **v0.2** (estensione) — `aurora-extension/` MV3: tre modalità (`off`/`local`/`hybrid`), soglie per-contesto allineate al backend, banner Shadow-DOM i18n (IT/EN), blocklist `declarativeNetRequest` per i tunnel BitM+, storico incidenti nel popup. Default `local`: zero rete, zero storage remoto
+> - **v0.1** (estensione) — prima release MV3: rilevamento locale dei segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab
 > - **v7.4.2** — Fix test suite (46/49 → 49/49): soglie latenza ricalibrate (`extreme_latency >600ms`, `high_latency >300ms`, `elevated_latency >150ms`) con etichette stabili allineate a `CRITICAL_BLOCK`/`_AMPLIFIER_WEIGHTS`, short-circuit deterministico del layer trajectory quando la sessione non contiene pattern sensibili (login/admin/change-pw/rapid-nav) → elimina ~1s di round-trip LLM su ogni sessione "noiosa" e rende la cache fingerprint davvero osservabile
 > - **v7.4.1** — Hardening sicurezza: `TRUSTED_PROXIES` per XFF, `ADMIN_TOKEN` sugli endpoint admin/WS/dashboard, fix rate-limit Redis che contava le richieste rifiutate, lifespan FastAPI, allineamento `detection.js` ↔ `extractor.py`, persistenza stato per-tab dell'estensione su `chrome.storage.session`
 > - **v7.4** — Analisi LLM della traiettoria di sessione (pattern post-compromissione) + spiegazioni utente in italiano + banner collector + colonna Pattern dashboard
@@ -43,7 +44,7 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 - [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
 - [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
 - [Analisi LLM della traiettoria (v7.4)](#-analisi-llm-della-traiettoria-v74)
-- [Estensione browser BitM-LLM Shield (v0.1)](#-estensione-browser-bitm-llm-shield-v01)
+- [Estensione browser AURORA (v0.2)](#-estensione-browser-aurora-v02)
 - [Changelog](#-changelog)
 
 ---
@@ -55,7 +56,7 @@ Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvi
 ### A. Provalo subito con Docker (~30 secondi)
 
 ```bash
-git clone <repo-url> && cd Bitm_LLM
+git clone <repo-url> && cd AURORA
 docker compose up --build
 ```
 
@@ -70,7 +71,7 @@ LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
 
 # Ollama locale (nessun costo ricorrente)
 docker compose --profile ollama up
-docker exec -it bitm-ollama ollama pull llama3.1
+docker exec -it aurora-ollama ollama pull llama3.1
 LLM_BACKEND=ollama docker compose --profile ollama up
 ```
 
@@ -89,20 +90,20 @@ Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, mark
 ### C. Ricercatori e studenti
 
 ```bash
-docker run --rm -p 8000:8000 ghcr.io/<owner>/bitm-llm:latest
+docker run --rm -p 8000:8000 ghcr.io/<owner>/aurora:latest
 ```
 
 Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
 
 ### D. Protezione lato utente con l'estensione browser
 
-Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), carica l'estensione `bitm-extension/`:
+Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), carica l'estensione `aurora-extension/`:
 
 1. `chrome://extensions` (oppure `edge://extensions`)
 2. Attiva "Modalità sviluppatore" in alto a destra
-3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `bitm-extension/`
+3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `aurora-extension/`
 
-L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato inviato in rete. Vedi §[Estensione browser BitM-LLM Shield](#-estensione-browser-bitm-llm-shield-v01) per il dettaglio.
+In modalità `local` (default) l'estensione gira 100% lato client: nessuna connessione al backend, nessun dato inviato in rete. La modalità `hybrid` (opt-in) può invece interrogare il backend per spiegazioni LLM. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora-v02) per il dettaglio.
 
 ---
 
@@ -123,7 +124,7 @@ L'estensione gira 100% in locale: nessuna connessione al backend, nessun dato in
 | **Cache LLM** | Risultati TTL-cached per `(canvas_hash, user_agent[:60])` |
 | **Dashboard WebSocket** | Feed live eventi + ring buffer 500 slot + chart + export CSV |
 | **Webhook push** | Notifica HTTP POST asincrona verso Slack / Teams / SIEM ad ogni BLOCK |
-| **Fine-tuning LoRA** | Pipeline di conversione `bitm_events.jsonl → dataset ChatML` + training LoRA di LLaMA 3.1 |
+| **Fine-tuning LoRA** | Pipeline di conversione `aurora_events.jsonl → dataset ChatML` + training LoRA di LLaMA 3.1 |
 | **Rilevamento BitM/BitM+** | Firme specifiche per noVNC/WebSockify/TigerVNC (RFB), Apache Guacamole/FreeRDP (RDP), ngrok/Puppeteer/MalSrv/evilGet (BitM+) |
 
 ---
@@ -158,24 +159,26 @@ HTTP POST /api/bitm/collect
 
 ### Boost contestuale
 
-In contesti `login`, `payment`, `admin`, segnali deboli amplificano lo score con pesi individuali (cappati a `MAX_BOOST = 0.25`):
+In contesti `login`, `payment`, `admin`, segnali deboli amplificano lo score con pesi individuali (somma cappata a `MAX_BOOST = 0.25`):
 
 | Segnale debole | Boost |
 |----------------|-------|
+| `tunnel_host` | +0.18 |
 | `vpn_detected` | +0.16 |
-| `timezone_anomaly` | +0.12 |
-| `swiftshader_webgl` | +0.10 |
-| `zero_plugins` | +0.09 |
-| `no_languages` / `no_webgl_renderer` | +0.08 |
-| `empty_canvas` / `suspicious_resolution` | +0.06–0.07 |
-| `no_timezone` | +0.06 |
+| `timezone_anomaly` / `high_latency` | +0.12 |
+| `swiftshader_webgl` / `iframe_overlay` | +0.10 |
+| `no_languages` | +0.08 |
+| `empty_canvas` | +0.07 |
+| `no_timezone` / `suspicious_resolution` | +0.06 |
+| `no_webgl_renderer` / `elevated_latency` | +0.05 |
+| `zero_plugins` | +0.03 |
 
 ---
 
 ## 📁 Struttura del progetto
 
 ```
-bitm-plugin/
+aurora-plugin/
 ├── app/
 │   ├── main.py          # FastAPI entry point, middleware GeoIP, endpoint /api/bitm/collect
 │   ├── config.py        # Variabili d'ambiente: LLM, Redis, GeoIP, Webhook
@@ -186,23 +189,25 @@ bitm-plugin/
 │   ├── redis_client.py  # SessionStore: Redis + fallback in-memory             [v6]
 │   ├── broadcaster.py   # Pub/sub in-process, ring buffer WebSocket            [v6.1]
 │   ├── notifier.py      # Webhook push asincrono per eventi BLOCK              [v6.2]
-│   ├── logger.py        # log_event() → stdout colorato + bitm_events.jsonl
+│   ├── logger.py        # log_event() → stdout colorato + aurora_events.jsonl
+│   ├── __init__.py      # __version__ centralizzato (importato come AURORA_VERSION)
 │   └── static/
 │       ├── dashboard.html   # Dashboard real-time
+│       ├── collector.js     # Collector one-liner servito da GET /collector.js   [v7.3]
 │       └── test_page.html   # Pagina di test manuale
 ├── tests/
-│   ├── run_tests.py     # Test suite (32 casi: legit/attack/suspicious/edge/system)
+│   ├── run_tests.py     # Test suite (49 casi: legit/attack/suspicious/edge/system)
 │   └── e2e_playwright/                                                          [v7.1]
 │       ├── run_e2e.py          # Orchestratore scenari evasivi + report
 │       └── requirements-e2e.txt
 ├── training/                                                                    [v7.0]
-│   ├── build_dataset.py # Converte bitm_events.jsonl → dataset ChatML SFT
+│   ├── build_dataset.py # Converte aurora_events.jsonl → dataset ChatML SFT
 │   └── train_lora.py    # Fine-tuning LoRA di LLaMA 3.1 (transformers + peft + trl)
 ├── diagnose.py          # Diagnostica end-to-end del backend LLM
 ├── run.py               # Entry point uvicorn
 ├── requirements.txt
 ├── .env.example
-└── bitm_events.jsonl    # Log eventi JSONL (append-only)
+└── aurora_events.jsonl    # Log eventi JSONL (append-only)
 ```
 
 ---
@@ -237,9 +242,9 @@ Il progetto si compone di **tre artefatti installabili indipendentemente**:
 
 | Componente | Cartella | Serve quando… |
 |-----------|----------|---------------|
-| **Backend server** (FastAPI) | `bitm-plugin/` | proteggi un sito di tua proprietà (server-side detection) |
-| **Collector JavaScript** | `bitm-plugin/app/static/collector.js` | integri il backend su un sito esistente via `<script>` |
-| **Estensione browser** (MV3) | `bitm-extension/` | vuoi protezione lato utente su qualsiasi sito |
+| **Backend server** (FastAPI) | `aurora-plugin/` | proteggi un sito di tua proprietà (server-side detection) |
+| **Collector JavaScript** | `aurora-plugin/app/static/collector.js` | integri il backend su un sito esistente via `<script>` |
+| **Estensione browser** (MV3) | `aurora-extension/` | vuoi protezione lato utente su qualsiasi sito |
 
 Le due modalità di installazione del backend — **Docker** e **Python locale** — sono alternative. Scegli Docker se vuoi la via più rapida e zero-config; scegli Python locale se stai sviluppando/modificando il codice.
 
@@ -250,13 +255,13 @@ Le due modalità di installazione del backend — **Docker** e **Python locale**
 **Prerequisiti**: Docker Desktop ≥ 24 o Docker Engine + docker-compose plugin.
 
 ```bash
-git clone <repo-url> && cd Bitm_LLM
+git clone <repo-url> && cd AURORA
 docker compose up --build
 ```
 
 Questo singolo comando:
-1. Builda l'immagine `bitm-llm:local` a partire da `bitm-plugin/Dockerfile` (Python 3.13-slim)
-2. Avvia il container `bitm-api` sulla porta `8000`
+1. Builda l'immagine `aurora:local` a partire da `aurora-plugin/Dockerfile` (Python 3.13-slim)
+2. Avvia il container `aurora-api` sulla porta `8000`
 3. Usa `LLM_BACKEND=stub` di default → nessuna API key richiesta
 4. Store sessioni: in-memory (nessun Redis)
 
@@ -268,7 +273,7 @@ docker compose --profile redis up
 
 # LLM locale via Ollama (richiede ~4 GB per llama3.1)
 docker compose --profile ollama up
-docker exec -it bitm-ollama ollama pull llama3.1
+docker exec -it aurora-ollama ollama pull llama3.1
 
 # Combinato Redis + Ollama
 docker compose --profile redis --profile ollama up
@@ -298,7 +303,7 @@ docker compose down --volumes    # stop + rimozione container + volumi
 #### B.1 — Ambiente virtuale e dipendenze
 
 ```bash
-cd bitm-plugin
+cd aurora-plugin
 python -m venv .venv
 
 # Windows PowerShell / cmd
@@ -317,7 +322,7 @@ Serve solo se vuoi **sessioni persistenti tra riavvii** o **multi-worker**. Senz
 
 ```bash
 # Opzione più rapida: container standalone
-docker run -d --name bitm-redis -p 6379:6379 redis:7-alpine
+docker run -d --name aurora-redis -p 6379:6379 redis:7-alpine
 
 # Verifica connessione
 redis-cli ping     # → PONG
@@ -439,20 +444,20 @@ Lo script prova a connettersi al backend LLM configurato e stampa un report (mod
 
 ---
 
-### Path C — Estensione browser (BitM-LLM Shield)
+### Path C — Estensione browser (AURORA)
 
 L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcuna chiamata di rete verso il server BitM.
 
-**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-bitm-llm-shield-v01)).
+**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora-v02)).
 
 #### C.1 — Installazione in modalità sviluppatore
 
 1. Apri `chrome://extensions` (Edge: `edge://extensions`)
 2. Attiva il toggle **Modalità sviluppatore** in alto a destra
 3. Clicca **Carica estensione non pacchettizzata**
-4. Seleziona la cartella `bitm-extension/` (quella che contiene `manifest.json`)
+4. Seleziona la cartella `aurora-extension/` (quella che contiene `manifest.json`)
 
-L'estensione appare nella lista con il nome **BitM-LLM Shield** e la versione **0.1.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a BitM-LLM Shield) per vedere il badge per-tab.
+L'estensione appare nella lista con il nome **AURORA** e la versione **0.2.0**. Fissa l'icona alla toolbar (menu puzzle → puntina accanto a AURORA) per vedere il badge per-tab.
 
 #### C.2 — Verifica funzionamento
 
@@ -466,7 +471,7 @@ Apri un sito normale (es. `https://example.com`):
 
 #### C.3 — Disinstallazione
 
-`chrome://extensions` → clicca **Rimuovi** sulla scheda BitM-LLM Shield. L'estensione non scrive nulla su disco remoto; rimuoverla cancella tutto il suo stato.
+`chrome://extensions` → clicca **Rimuovi** sulla scheda AURORA. L'estensione non scrive nulla su disco remoto; rimuoverla cancella tutto il suo stato.
 
 ---
 
@@ -483,7 +488,7 @@ docker compose up -d            # background (detached)
 
 # Status
 docker compose ps               # container attivi
-docker logs -f bitm-api         # log live
+docker logs -f aurora-api         # log live
 
 # Stop
 docker compose stop             # stop preservando i container
@@ -501,7 +506,7 @@ open http://localhost:8000/dashboard       # dashboard real-time
 ### Avvio B — Backend locale (Python)
 
 ```bash
-# Dalla cartella bitm-plugin/ con la venv attiva
+# Dalla cartella aurora-plugin/ con la venv attiva
 python run.py
 ```
 
@@ -509,8 +514,8 @@ Output atteso:
 
 ```
 [config] Backend LLM: stub/deterministic
-[bitm] Session store: memory
-[bitm] GeoIP: MaxMind DB non configurati (MAXMIND_CITY_DB / MAXMIND_ASN_DB)
+[aurora] Session store: memory
+[aurora] GeoIP: MaxMind DB non configurati (MAXMIND_CITY_DB / MAXMIND_ASN_DB)
 INFO:     Started server process [12345]
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
@@ -549,7 +554,7 @@ Eventi di "avvio" visibili all'utente:
 - Caricamento di una pagina → in 1-2 secondi badge verde/arancio/rosso a seconda del verdetto
 - Apertura del popup → verdetto, score, lista segnali, origin
 
-Per ricaricare l'estensione dopo una modifica al codice: `chrome://extensions` → clicca l'icona di refresh sulla scheda BitM-LLM Shield, poi ricarica le tab aperte.
+Per ricaricare l'estensione dopo una modifica al codice: `chrome://extensions` → clicca l'icona di refresh sulla scheda AURORA, poi ricarica le tab aperte.
 
 ### Avvio combinato: backend + collector su sito + estensione
 
@@ -557,14 +562,14 @@ I tre componenti sono orthogonali e possono coesistere. Esempio tipico di setup 
 
 ```bash
 # Terminal 1 — backend
-cd Bitm_LLM && docker compose up
+cd AURORA && docker compose up
 
 # Terminal 2 — serve una pagina demo con collector
-cd bitm-plugin/app/static
+cd aurora-plugin/app/static
 python -m http.server 8080
 
 # Browser
-# 1. installa bitm-extension/ (§C.1)
+# 1. installa aurora-extension/ (§C.1)
 # 2. apri http://localhost:8080/test_page.html
 # 3. controlla il dashboard backend (http://localhost:8000/dashboard)
 #    e il popup dell'estensione: dovrebbero concordare sul verdetto
@@ -853,7 +858,7 @@ BLOCK action
 ```json
 {
   "event_type": "BLOCK",
-  "product": "BitM-LLM Shield",
+  "product": "AURORA",
   "version": "6.2",
   "timestamp": "2026-04-16T10:00:00Z",
   "severity": "HIGH",
@@ -886,7 +891,7 @@ Il fallimento del webhook **non influisce mai** sulla risposta all'utente né ge
 
 ## 📝 Log eventi
 
-Ogni richiesta produce una riga JSON in `bitm_events.jsonl`:
+Ogni richiesta produce una riga JSON in `aurora_events.jsonl`:
 
 ```json
 {
@@ -914,7 +919,7 @@ Ogni richiesta produce una riga JSON in `bitm_events.jsonl`:
 
 ## 🎓 Fine-tuning LoRA (v7.0)
 
-La cartella `bitm-plugin/training/` contiene l'infrastruttura per specializzare LLaMA 3.1 sulle decisioni dello scorer, riducendo progressivamente la dipendenza da backend cloud.
+La cartella `aurora-plugin/training/` contiene l'infrastruttura per specializzare LLaMA 3.1 sulle decisioni dello scorer, riducendo progressivamente la dipendenza da backend cloud.
 
 ### Prompt compatto
 
@@ -922,7 +927,7 @@ Il `SYSTEM_PROMPT` in `app/scorer.py` è stato riscritto in versione v7 — **60
 
 ### 1. Conversione log → dataset (`build_dataset.py`)
 
-Converte `bitm_events.jsonl` in un dataset SFT in formato **ChatML** (`{"messages":[system,user,assistant]}`) compatibile con `trl.SFTTrainer` e HuggingFace Datasets.
+Converte `aurora_events.jsonl` in un dataset SFT in formato **ChatML** (`{"messages":[system,user,assistant]}`) compatibile con `trl.SFTTrainer` e HuggingFace Datasets.
 
 Pulizia applicata:
 
@@ -934,9 +939,9 @@ Pulizia applicata:
 Output: `train.jsonl`, `val.jsonl`, `stats.json`.
 
 ```bash
-cd bitm-plugin
+cd aurora-plugin
 python training/build_dataset.py \
-    --input bitm_events.jsonl \
+    --input aurora_events.jsonl \
     --output-dir training/dataset \
     --val-split 0.1 \
     --max-per-class 500      # opzionale, bilancia le 3 classi
@@ -980,7 +985,7 @@ L'adapter salvato è caricabile a runtime con `peft.PeftModel.from_pretrained(ba
 
 ## 🎭 E2E Playwright + CI (v7.1)
 
-La suite `bitm-plugin/tests/e2e_playwright/run_e2e.py` guida browser Chromium **headless** reali con Playwright e li fa attaccare l'API. Ogni scenario applica evasioni concrete (init-script JS, route blocking, rotazione UA, canvas/WebGL spoof) e POSTa il fingerprint reale a `/api/bitm/collect`.
+La suite `aurora-plugin/tests/e2e_playwright/run_e2e.py` guida browser Chromium **headless** reali con Playwright e li fa attaccare l'API. Ogni scenario applica evasioni concrete (init-script JS, route blocking, rotazione UA, canvas/WebGL spoof) e POSTa il fingerprint reale a `/api/bitm/collect`.
 
 ### Tecniche di evasione (7, ≥ 5 richieste)
 
@@ -1006,7 +1011,7 @@ Exit code ≠ 0 se `detection_rate < --min-detection` (default **0.90**).
 ### Esecuzione locale
 
 ```bash
-cd bitm-plugin
+cd aurora-plugin
 
 # 1. Deps e browser
 pip install -r tests/e2e_playwright/requirements-e2e.txt
@@ -1039,7 +1044,7 @@ BitM E2E Playwright v7.1 — Report finale
 
 ### GitHub Actions
 
-Il workflow `.github/workflows/e2e-playwright.yml` parte su push/PR toccando `bitm-plugin/**` (o via `workflow_dispatch` con override della soglia):
+Il workflow `.github/workflows/e2e-playwright.yml` parte su push/PR toccando `aurora-plugin/**` (o via `workflow_dispatch` con override della soglia):
 
 1. Setup Python 3.11 + cache pip
 2. Installa `requirements.txt` + `requirements-e2e.txt`
@@ -1059,7 +1064,7 @@ Per evitare dipendenze esterne in CI e sblocccare detection_rate significativi, 
 
 ## 🧪 Test
 
-La test suite copre **41 scenari** suddivisi in 5 categorie:
+La test suite copre **49 scenari** suddivisi in 5 categorie:
 
 | Categoria | N° | Scenari |
 |-----------|----|---------|
@@ -1067,7 +1072,7 @@ La test suite copre **41 scenari** suddivisi in 5 categorie:
 | `attack` | 13 | HeadlessChrome, Playwright+SwiftShader, Selenium, Tor, Puppeteer, latenza estrema + **T21–T27** BitM/BitM+ (noVNC title, Guacamole title, xssPayload URL, evilGet override, MalSrv port, noVNC UA leak, ngrok WS) |
 | `suspicious` | 6 | VPN+login, latenza alta+payment, VPN+canvas vuoto, timezone anomala, risoluzione sospetta, **T28 ngrok-dev+login** |
 | `edge` | 5 | Payload minimo, UA unicode, static asset, path sconosciuto, **T29 WebAuthn API nativa** |
-| `system` | 13 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field, webhook non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13 allineamento label BitM** |
+| `system` | 20 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field/non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13** allineamento label BitM, **S14–S15** collector.js + payload, **S16–S20** trajectory analysis |
 
 ### Esecuzione
 
@@ -1088,11 +1093,11 @@ python tests/run_tests.py --skip-system
 
 Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` al termine ed esce con codice `0` solo se tutti i test passano.
 
-### System check v6.2 + v7.0
+### System check (S01–S20)
 
 | ID | Verifica |
 |----|----------|
-| S01 | `/health` espone `version 6.x`, `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
+| S01 | `/health` espone `version` (major ≥ 6; runtime attuale 7.4.2), `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
 | S02 | Sessione multi-step: `request_count` cresce a ogni POST sullo stesso `sessionId` |
 | S03 | IP-block escalation: 3 BLOCK consecutivi → IP nel set bloccati permanenti |
 | S04 | Rate-limit: 40 richieste in rapida successione → almeno una `429` |
@@ -1105,6 +1110,13 @@ Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` 
 | **S11** | **`build_dataset.py` su fixture: scarta `from_cache` e `api_error`, conserva le 3 classi, emette ChatML (system/user/assistant) con target JSON valido** |
 | **S12** | **`train_lora.py --help` termina con exit 0 ed espone tutti i flag principali (`--dataset-dir`, `--base-model`, `--output-dir`, `--lora-r`, `--lora-alpha`, `--no-4bit`)** |
 | **S13** | **Label BitM/BitM+ allineati fra `extractor._detect_bitm` e `policy.CRITICAL_BLOCK` (regressione su v7.2)** |
+| **S14** | **`GET /collector.js`: risponde 200, MIME JS, e contiene `/api/bitm/collect` + `window.BitM`** |
+| **S15** | **POST di un payload collector-shaped su pagina BitM noVNC simulata → i segnali forti BitM/BitM+ scattano (contratto collector↔extractor)** |
+| **S16** | **`/health` espone `trajectory_analysis` (bool) coerente con la env var** |
+| **S17** | **Stub trajectory deterministico: stessa sequenza ripetuta 3× → stesso `trajectory_pattern`** |
+| **S18** | **`login → change-password` entro 5s → pattern famiglia `panic_password_change` + almeno `challenge`** |
+| **S19** | **`/admin` senza passare da `/login` → `direct_admin_access`** |
+| **S20** | **Sessione con una sola pagina → short-circuit `insufficient_history` senza chiamare l'LLM** |
 
 ---
 
@@ -1134,7 +1146,7 @@ Il plugin estrae 9 nuovi segnali diagnostici da campi opzionali del payload (il 
 | `webauthn_api_override` | `navigator.credentials.get.toString()` non è `[native code]` → probabile `evilGet()` (BitM+) | +0.70 | **CRITICAL → BLOCK** |
 | `bitm_websocket_transport` | WS endpoint su host tunneling, porta BE, o path `/websockify`, `/vnc`, `/guacamole` | +0.55 | **CRITICAL → BLOCK** |
 | `tunnel_host` | `pageUrl` o `referrer` su tunnel HTTPS (`*.ngrok.io`, `*.ngrok-free.app`, `*.ngrok.app`, `*.ngrok.dev`, `*.trycloudflare.com`, `*.loca.lt`, `*.localtunnel.me`, `*.serveo.net`) | +0.25 | weak — amplifica su login/payment/admin |
-| `iframe_overlay` | ≥ 3 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
+| `iframe_overlay` | ≥ 5 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
 
 ### Come arrivare alle firme dal client
 
@@ -1193,18 +1205,18 @@ Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici princi
 
 ### File aggiunti
 
-- `bitm-plugin/Dockerfile` — `python:3.13-slim`, utente non-root `bitm`, healthcheck integrato su `/health`, `CMD` diretto a `uvicorn` (no `--reload`)
-- `bitm-plugin/.dockerignore` — esclude `__pycache__/`, `.env`, `tests/`, `doc/`, `bitm_events.jsonl`, artefatti IDE
+- `aurora-plugin/Dockerfile` — `python:3.13-slim`, utente non-root `aurora`, healthcheck integrato su `/health`, `CMD` diretto a `uvicorn` (no `--reload`)
+- `aurora-plugin/.dockerignore` — esclude `__pycache__/`, `.env`, `tests/`, `doc/`, `aurora_events.jsonl`, artefatti IDE
 - `docker-compose.yml` (root) — servizio `api` di default + profili opzionali `redis` e `ollama`
-- `bitm-plugin/app/static/collector.js` — collector vanilla JS (~140 righe, nessuna dipendenza), legge `data-endpoint`/`data-page`/`data-auto` dal tag `<script>`, espone `window.BitM`
-- `.github/workflows/docker-publish.yml` — build multi-arch (`amd64`/`arm64`) + push su `ghcr.io/<owner>/bitm-llm:{latest,sha-...,vX.Y.Z}` a ogni push su `master`/tag `v*`
+- `aurora-plugin/app/static/collector.js` — collector vanilla JS (~140 righe, nessuna dipendenza), legge `data-endpoint`/`data-page`/`data-auto` dal tag `<script>`, espone `window.BitM`
+- `.github/workflows/docker-publish.yml` — build multi-arch (`amd64`/`arm64`) + push su `ghcr.io/<owner>/aurora:{latest,sha-...,vX.Y.Z}` a ogni push su `master`/tag `v*`
 
 ### File modificati
 
-- `bitm-plugin/app/config.py` — `LLM_BACKEND` default `anthropic` → `stub`. Chi vuole LLM reale passa esplicitamente `LLM_BACKEND=anthropic|ollama`
-- `bitm-plugin/app/main.py` — nuovo endpoint `GET /collector.js` (MIME `application/javascript`, cache 1h)
-- `bitm-plugin/.env.example` — riordinato per promuovere `stub` come prima opzione
-- `bitm-plugin/tests/run_tests.py` — nuovo **S14 `sys_collector_js_endpoint`**: verifica 200, MIME JS, stringhe `/api/bitm/collect` e `window.BitM` nel body. Totale test 41 → 42
+- `aurora-plugin/app/config.py` — `LLM_BACKEND` default `anthropic` → `stub`. Chi vuole LLM reale passa esplicitamente `LLM_BACKEND=anthropic|ollama`
+- `aurora-plugin/app/main.py` — nuovo endpoint `GET /collector.js` (MIME `application/javascript`, cache 1h)
+- `aurora-plugin/.env.example` — riordinato per promuovere `stub` come prima opzione
+- `aurora-plugin/tests/run_tests.py` — nuovo **S14 `sys_collector_js_endpoint`**: verifica 200, MIME JS, stringhe `/api/bitm/collect` e `window.BitM` nel body. Totale test 41 → 42
 
 ### API del collector JS
 
@@ -1235,7 +1247,7 @@ La v7.4 aggiunge `analyze_trajectory` (`app/scorer.py`) — un **secondo layer L
 }
 ```
 
-Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.15`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
+Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.25`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
 
 ### Abilitazione
 
@@ -1249,7 +1261,7 @@ TRAJECTORY_CACHE_TTL=60        # cache session-keyed per evitare token-burn
 
 ### Invariante regressione-zero
 
-Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test T30–T32 + S16–S17 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
+Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test S16–S20 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
 
 ### Costo indicativo (Anthropic Haiku)
 
@@ -1272,39 +1284,47 @@ Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coni
 
 ---
 
-## 🛡 Estensione browser BitM-LLM Shield (v0.1)
+## 🛡 Estensione browser AURORA (v0.2)
 
-Mentre il backend server-side (`bitm-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `bitm-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere.
+Mentre il backend server-side (`aurora-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `aurora-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere. Da v0.2 l'estensione ha tre modalità — `off`, `local` (default, zero rete) e `hybrid` (opt-in: interroga il backend per spiegazioni LLM e trajectory pattern) — selezionabili dal popup → **Impostazioni**.
 
 ### Architettura
 
 ```
-bitm-extension/
-├── manifest.json              # MV3
+aurora-extension/
+├── manifest.json              # MV3 (icone, action.default_icon, declarativeNetRequest)
+├── icons/                     # icon-{16,32,48,128}.png (+ _generate.py)
+├── _locales/{it,en}/messages.json   # i18n nativo Chrome (default italiano)
 └── src/
-    ├── page-hook.js           # MAIN world: hook WebSocket + credentials.get
-    ├── detection.js           # porting JS delle regole di extractor._detect_bitm
-    ├── content-script.js      # ISOLATED world: detect, banner, blocco submit
-    ├── background.js          # service worker: stato per-tab + badge toolbar
-    ├── popup.html / .css / .js
+    ├── page-hook.js           # MAIN world: Proxy su WebSocket + ispezione credentials.get
+    ├── detection.js           # porting di extractor._detect_bitm + soglie per-contesto
+    ├── session.js             # tracker pages[]+timings[] in sessionStorage
+    ├── banner.js              # banner Shadow-DOM condiviso (IT/EN)
+    ├── content-script.js      # ISOLATED world: detect → (hybrid) probe → banner, con dedup
+    ├── background.js          # service worker: merge verdict, storico, net-rules, CORS probe
+    ├── net-rules.js / .json   # regole declarativeNetRequest (dinamiche + statiche)
+    ├── settings.js            # wrapper chrome.storage.local
+    └── popup.html / .css / .js   # popup 3-tab (Stato / Storico / Impostazioni)
 ```
 
-Due script iniettati per-tab:
+Per ogni tab vengono iniettati un page-hook in MAIN world e una catena di content script in ISOLATED world (`settings → detection → session → banner → content-script`):
 
-1. **`page-hook.js`** gira nel MAIN world (stesso contesto di esecuzione dello script della pagina) — necessario per patchare `window.WebSocket` e ispezionare `navigator.credentials.get`. Non ha accesso alle API `chrome.*`.
-2. **`content-script.js`** gira nell'ISOLATED world (sandbox dell'estensione) — riceve via `window.postMessage` gli snapshot prodotti dal page-hook, applica `detection.js` e comunica i verdetti al service worker.
+1. **`page-hook.js`** gira nel MAIN world (stesso contesto di esecuzione dello script della pagina) — necessario per patchare `window.WebSocket` (via `Proxy`, anti-tamper transparent) e ispezionare `navigator.credentials.get`. Non ha accesso alle API `chrome.*`.
+2. **`content-script.js`** gira nell'ISOLATED world (sandbox dell'estensione) — riceve via `window.postMessage` gli snapshot prodotti dal page-hook, applica `detection.js`, deduplica gli snapshot ridondanti e comunica i verdetti al service worker (in `hybrid` interroga anche il backend).
 
 ### Logica di detection
 
-La funzione `BitMDetection.detect(input)` in `detection.js` è un porting fedele di `extractor._detect_bitm` + `_pre_score`: stesse regex (`TUNNEL_HOST_RE`, `NOVNC_TITLE_RE`, `GUACAMOLE_TITLE_RE`, `XSS_PAYLOAD_RE`, `BITM_PORT_RE`), stessi marker UA (`novnc/websockify/guacamole/tigervnc`), stessi pesi (`_AMPLIFIER_WEIGHTS`), stesso insieme critico (`CRITICAL_BLOCK`).
+La funzione `BitMDetection.detect(input)` in `detection.js` è un porting fedele di `extractor._detect_bitm` + `_pre_score`: stesse regex (`TUNNEL_HOST_RE`, `NOVNC_TITLE_RE`, `GUACAMOLE_TITLE_RE`, `XSS_PAYLOAD_RE`, `BITM_PORT_RE`), stessi marker UA (`novnc/websockify/guacamole/tigervnc`), stessi pesi pre-score, stesso insieme critico (`CRITICAL_BLOCK`).
 
-Le soglie per il verdetto sono fisse (non contestuali come nel server, v. §[Limitazioni](#limitazioni-note-v010)):
+Da v0.2 le soglie del verdetto **replicano la tabella per-contesto di `policy.py`** (non più una singola coppia fissa): `detection.js` mappa il path della pagina a `login`/`payment`/`admin`/`static`/`default` e confronta lo score con la coppia `(challenge, block)` corrispondente. I segnali `CRITICAL` forzano comunque `block` indipendentemente dallo score.
 
-| Output | Condizione |
-|--------|-----------|
-| `block` | almeno un segnale in `CRITICAL` **oppure** score ≥ 0.65 |
-| `challenge` | score ≥ 0.28 |
-| `allow` | altrimenti |
+| Contesto | CHALLENGE | BLOCK |
+|----------|-----------|-------|
+| `login` | ≥ 0.28 | ≥ 0.62 |
+| `payment` | ≥ 0.20 | ≥ 0.55 |
+| `admin` | ≥ 0.22 | ≥ 0.60 |
+| `default` | ≥ 0.40 | ≥ 0.75 |
+| `static` | ≥ 0.70 | ≥ 0.92 |
 
 ### Comportamento runtime
 
@@ -1313,14 +1333,16 @@ Le soglie per il verdetto sono fisse (non contestuali come nel server, v. §[Lim
 3. **Re-probe** dopo 2 s (i WS spesso si aprono post-load) via `postMessage({source:"bitm-content", cmd:"probe"})`
 4. Ogni snapshot arriva al content-script → `BitMDetection.detect(...)` → `chrome.runtime.sendMessage({type:"bitm-verdict", ...})` al background
 5. **Background** mantiene il verdetto peggiore per-tab (mai declassa), aggiorna il badge toolbar (vuoto/`!`/`X`, verde/arancio/rosso) e lo rende disponibile al popup
-6. Se il verdetto corrente è `block`, l'evento `submit` su un `<form>` che contiene un `<input type=password>` viene **preventDefault** + banner shadow-DOM in cima alla pagina
+6. Se il verdetto corrente è `block`, l'evento `submit` su un `<form>` che contiene un `<input type=password>` viene **preventDefault** + banner shadow-DOM (`banner.js`, condiviso IT/EN) in cima alla pagina
+
+> In `mode=hybrid` il content-script invia anche lo snapshot (deduplicato: una sola POST per pagina) al backend e fonde la risposta LLM (`explanation_user`, `trajectory_pattern`) col verdetto locale secondo la regola "worst wins"; se il backend è irraggiungibile resta il verdetto locale.
 
 ### Privacy
 
-- **Nessun `fetch()` o `XMLHttpRequest`** verso il backend o qualsiasi server esterno
-- **Nessun `chrome.storage`** scritto in v0.1 (lo stato vive solo in memoria, per-tab)
-- **Nessuna telemetria**: l'estensione non ha permessi `webRequest` né `cookies`
-- Permessi dichiarati in `manifest.json`: `storage` (riservato per v0.2+), `activeTab`, `host_permissions: <all_urls>` (solo per iniettare i content script, non per leggere network)
+- **`local` (default)**: nessun `fetch()`/`XMLHttpRequest` verso il backend o qualsiasi server esterno, nessuna telemetria (l'estensione non ha permessi `webRequest` né `cookies`)
+- **`hybrid` (opt-in)**: l'estensione POSTa al **solo `backendUrl` configurato** `sessionId` (UUID locale), `userAgent`, path e fingerprint browser — mai cookie, credenziali o body di form. Backend irraggiungibile → fallback silenzioso al verdetto locale
+- **Storage solo locale**: stato per-tab su `chrome.storage.session`, storico incidenti + impostazioni su `chrome.storage.local`. Nessuno storage remoto
+- Permessi dichiarati in `manifest.json`: `storage`, `activeTab`, `alarms`, `declarativeNetRequest` / `declarativeNetRequestWithHostAccess`, `host_permissions: <all_urls>`
 
 ### Testing manuale
 
@@ -1331,7 +1353,7 @@ Le soglie per il verdetto sono fisse (non contestuali come nel server, v. §[Lim
 | Tunnel ngrok su login (simulato) | pagina con `<form>` password su `*.ngrok-free.app` | verdetto `challenge`, submit NON bloccato |
 | Form submit su pagina bloccata | `/login` con verdetto precedente `block` | `preventDefault` + banner "Invio bloccato" |
 
-Smoke-test rapido della logica via Node (dalla cartella `bitm-extension/`):
+Smoke-test rapido della logica via Node (dalla cartella `aurora-extension/`):
 
 ```bash
 node -e "
@@ -1350,12 +1372,11 @@ console.log(JSON.stringify(self.BitMDetection.detect({
 # → verdict: block, score: 1, 6 segnali
 ```
 
-### Limitazioni note (v0.1.0)
+### Limitazioni note (v0.2.0)
 
-- **Nessun boost contestuale**: il server applica +0.16 VPN, +0.18 tunnel_host, ecc. sui segnali deboli quando il `context` è `login`/`payment`/`admin`. L'estensione no. Conseguenza: un attacco con solo `tunnel_host` su una login page ha score 0.25 (< 0.28) → allow. Roadmap v0.2: guardare `<input type=password>` nel DOM per inferire il contesto login e attivare il boost
+- **Nessun boost dei segnali deboli**: da v0.2 l'estensione replica le soglie per-contesto del server, ma **non** applica ancora il boost incrementale (`_AMPLIFIER_WEIGHTS`, +0.16 VPN, +0.18 tunnel_host, ecc.) dei segnali deboli su `login`/`payment`/`admin`. Conseguenza: un attacco con solo `tunnel_host` su una login page ha score 0.25 (< 0.28) → allow, dove il server arriverebbe a `challenge`
 - **Firefox non supportato**: MV3 su Firefox non ha ancora il `content_scripts.world: "MAIN"` stabile. Serve un port che usi `<script>` injection via `web_accessible_resources`
-- **Nessuna icona**: `manifest.json` non specifica `action.default_icon` → Chrome mostra un placeholder. Da aggiungere per la distribuzione store
-- **Nessuna whitelist utente**: ogni page-load riparte vergine. Roadmap v0.2: `chrome.storage.local` con "origin approvato dall'utente" per silenziare il banner su siti conosciuti
+- **Nessuna whitelist utente**: ogni page-load riparte vergine. Roadmap: `chrome.storage.local` con "origin approvato dall'utente" per silenziare il banner su siti conosciuti
 - **Nessuna difesa contro clone statico**: se un attaccante clona staticamente la login e non fa proxy, l'estensione vede un sito apparentemente normale. La difesa contro phishing statico resta responsabilità di DMARC, takedown e password manager che validano l'origin
 
 ---
@@ -1397,23 +1418,23 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 **Bug fix funzionali**
 - **Rate-limit Redis** (`app/redis_client.py::rate_check`): nel ramo Redis, le richieste **rifiutate venivano aggiunte comunque** alla sorted-set → la finestra si gonfiava e i rigetti si auto-rinforzavano. Ora `zadd` avviene solo se la richiesta è accettata (pipeline split in due fasi). Comportamento ora allineato al ramo in-memory
 - **Score incoerente** (`app/policy.py::decide`): la UI riceveva lo score grezzo LLM mentre `action` si basava sullo score amplificato (floor + boost contestuale + boost trajectory). Ora `decide` sovrascrive `score_result["risk_score"]` con il valore effettivamente usato
-- **Sync `detection.js` ↔ `extractor.py`** (`bitm-extension/src/detection.js`): porte BitM (rimosso `8080` non presente nel backend), soglia `iframe_overlay` da `>=3` a `>=5`, aggiunto filtro `_SEARCH_ENGINE_RE` per non triggerare `novnc_client_marker`/`guacamole_client_marker` su titoli tipo "noVNC - Ricerca Google"
+- **Sync `detection.js` ↔ `extractor.py`** (`aurora-extension/src/detection.js`): porte BitM (rimosso `8080` non presente nel backend), soglia `iframe_overlay` da `>=3` a `>=5`, aggiunto filtro `_SEARCH_ENGINE_RE` per non triggerare `novnc_client_marker`/`guacamole_client_marker` su titoli tipo "noVNC - Ricerca Google"
 - **Fire-and-forget hardening** (`app/notifier.py`): `asyncio.create_task(...)` senza strong-ref è GC-abile; ora i task sono tenuti in un set modulo + `add_done_callback(discard)`
-- **`colorDepth || 24`** (`app/extractor.py`, `bitm-extension/src/background.js`): `colorDepth=0` (anomalia) veniva mascherato a 24. Fix con `None`-check lato Python e `??` lato JS
+- **`colorDepth || 24`** (`app/extractor.py`, `aurora-extension/src/background.js`): `colorDepth=0` (anomalia) veniva mascherato a 24. Fix con `None`-check lato Python e `??` lato JS
 - **Session ID fallback** (`app/main.py`): se il client non invia `sessionId`, il default era l'IP → due utenti dietro lo stesso NAT condividevano `block_count`. Ora fallback = `anon-<sha1(ip+ua+canvas+languages)>` così fingerprint diversi generano sid diversi
-- **`LOG_FILE` relativo alla CWD** (`app/logger.py`): ora risolve a `<pkg>/bitm_events.jsonl` in base al path del modulo, override via env `BITM_LOG_FILE`
+- **`LOG_FILE` relativo alla CWD** (`app/logger.py`): ora risolve a `<pkg>/aurora_events.jsonl` in base al path del modulo, override via env `AURORA_LOG_FILE`
 
 **Modernizzazione FastAPI**
 - **Lifespan context manager** (`app/main.py`): migrato da `@app.on_event("startup"/"shutdown")` deprecato a `@asynccontextmanager` — elimina il deprecation warning
 - **Config webhook lazy** (`app/notifier.py`): `_load_config()` non più a import-time; `reload_config()` per i test che cambiano env a runtime
 
-**Estensione v0.2.1 (background.js)**
+**Estensione v0.2.0 (background.js)**
 - **Persistenza stato per-tab su `chrome.storage.session`**: il service worker MV3 viene terminato dopo ~30 s idle. La vecchia `state = new Map()` si azzerava, badge e risposte al popup diventavano vuote. Ora shadow-write su `chrome.storage.session` + lazy-load su cache-miss al respawn
 - **`safeBackendUrl` normalizza all'origin**: un URL come `http://host/api` produceva `host/api/api/bitm/collect`. Ora si tiene solo `u.origin`, il path è sempre `/api/bitm/collect`
 - **`fetch()` espliciti**: `credentials: "omit"`, `cache: "no-store"` su probe + test-connection
 
 **Tooling**
-- **`.gitignore`** creato alla root con pattern Python/.venv/IDE/log. Rimosso `bitm-plugin/app/__pycache__/` dal tracking (prima committato per errore)
+- **`.gitignore`** creato alla root con pattern Python/.venv/IDE/log. Rimosso `aurora-plugin/app/__pycache__/` dal tracking (prima committato per errore)
 
 
 
@@ -1428,11 +1449,11 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
   - **JSONL log** (`app/logger.py`): nuovi campi `trajectory_score`, `trajectory_pattern`, `explanation_user`, `explanation_admin` nel log eventi
 - **Config** (`app/config.py`, `.env.example`): `LLM_TRAJECTORY_ANALYSIS=auto|on|off` (default `auto` → on se backend reale, off su stub per zero regressioni). `TRAJECTORY_CACHE_TTL=60` per cache session-keyed che evita token-burn su ping ripetuti
 - **Health echo** (`GET /health`): nuovo campo `trajectory_analysis: bool` coerente con la env var
-- **Test suite**: 44 → 49 casi. Aggiunti **T30 `trajectory_panic_password_change`** (login→change-password in <3s → pattern + challenge), **T31 `trajectory_direct_admin`** (accesso `/admin` senza `/login` → direct_admin_access), **T32 `trajectory_insufficient_history`** (una sola pagina → short-circuit senza chiamare LLM), **S16 `sys_trajectory_config_echo`** (`/health` coerente con env), **S17 `sys_trajectory_stub_determinism`** (stesso input → stesso pattern, CI deterministica)
+- **Test suite**: 44 → 49 casi. Aggiunti **S16 `sys_trajectory_config_echo`** (`/health` coerente con env), **S17 `sys_trajectory_stub_determinism`** (stesso input → stesso pattern, CI deterministica), **S18 `sys_trajectory_panic_password`** (login→change-password in <5s → pattern + challenge), **S19 `sys_trajectory_direct_admin`** (accesso `/admin` senza `/login` → direct_admin_access), **S20 `sys_trajectory_insufficient_history`** (una sola pagina → short-circuit senza chiamare LLM)
 
 
 
-### v0.2.0 (estensione) — BitM-LLM Shield backend-aware hardening
+### v0.2.0 (estensione) — AURORA backend-aware hardening
 - **Tre modalità operative** (popup → Settings → `off | local | hybrid`). Default `local` preserva l'invariante v0.1: zero rete, zero storage remoto. `hybrid` opt-in: l'estensione POSTa fingerprint + trajectory al backend `/api/bitm/collect` e riceve `explanation_user`/`trajectory_pattern` generati da LLM (riusa la pipeline v7.4)
 - **Banner condiviso** (`src/banner.js`): Shadow DOM `mode:"closed"`, colori rosso `#c0392b` (block) / arancio `#d68910` (challenge), titolo i18n "Richiesta bloccata"/"Richiesta sospetta"/"Blocked request". Se `explanation_user` arriva dal backend sostituisce il fallback locale. Stessa forma del banner `collector.js` v7.4 (DRY cross-component)
 - **Session tracker** (`src/session.js`): accumula `pages[]+timings[]` per-origin in `sessionStorage`, sliding window 20/40, inviato al backend come contesto trajectory per ottenere pattern `panic_password_change` / `direct_admin_access` / `rapid_navigation`
@@ -1440,13 +1461,13 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 - **Popup 3-tab** (`src/popup.{html,js,css}`): **Stato** (verdict + pattern + explanation + badge online/offline/locale), **Storico** (ring buffer 50 eventi non-allow in `chrome.storage.local`), **Impostazioni** (mode radio, URL backend, `Testa connessione` → `/health`, toggle net-rules)
 - **i18n Chrome nativo** (`_locales/it/messages.json`, `_locales/en/messages.json`): default italiano, fallback automatico inglese; copre banner, popup, badge
 - **Offline-first**: se il backend è irraggiungibile in `mode=hybrid`, il service worker fa fallback silenzioso al verdict locale (AbortController timeout 2.5s, nessuna eccezione user-visibile, nessun retry loop)
-- **Privacy**: in `hybrid` partono solo `sessionId` (UUID locale) + user-agent + path + fingerprint browser verso il solo `backendUrl` configurato. Zero cookie, zero body form, zero credenziali. Vedi `bitm-extension/README.md` per i dettagli
+- **Privacy**: in `hybrid` partono solo `sessionId` (UUID locale) + user-agent + path + fingerprint browser verso il solo `backendUrl` configurato. Zero cookie, zero body form, zero credenziali. Vedi `aurora-extension/README.md` per i dettagli
 - **Test manuali** (`tests/manual_playwright.js`, non CI): 4 scenari — local offline, hybrid con backend attivo, hybrid con backend spento (fallback), declarativeNetRequest attivo
 
 
 
-### v0.1.0 (estensione) — BitM-LLM Shield browser extension (MV3)
-- **`bitm-extension/`** — Estensione Chromium MV3 per protezione lato utente su qualsiasi sito
+### v0.1.0 (estensione) — AURORA browser extension (MV3)
+- **`aurora-extension/`** — Estensione Chromium MV3 per protezione lato utente su qualsiasi sito
 - **Porting JS delle regole** (`src/detection.js`) di `extractor._detect_bitm` + `_pre_score`: 9 segnali, stesse regex e stessi pesi del backend, insieme `CRITICAL` allineato con `policy.CRITICAL_BLOCK`
 - **Page-hook in MAIN world** (`src/page-hook.js`): WebSocket patcher per tracciare endpoint aperti + ispezione `navigator.credentials.get` per detection `evilGet`
 - **Content-script in ISOLATED world** (`src/content-script.js`): detect + banner shadow-DOM quando verdetto = `block` + capture-phase listener su `submit` che blocca i form con password sui siti flaggati
@@ -1457,10 +1478,10 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 
 
 ### v7.3.0 — Distribuzione one-shot (Docker + GHCR + collector.js)
-- **Docker** (`bitm-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
-- **Collector standalone** (`bitm-plugin/app/static/collector.js` + `GET /collector.js` in `app/main.py`): integrazione one-liner via `<script src=".../collector.js" data-endpoint="..." data-auto="true">`. Espone `window.BitM` con `classify()`, `fingerprint()`, `onResult(fn)`
+- **Docker** (`aurora-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
+- **Collector standalone** (`aurora-plugin/app/static/collector.js` + `GET /collector.js` in `app/main.py`): integrazione one-liner via `<script src=".../collector.js" data-endpoint="..." data-auto="true">`. Espone `window.BitM` con `classify()`, `fingerprint()`, `onResult(fn)`
 - **Default `LLM_BACKEND=stub`** (`app/config.py`): eliminata la necessità di una API key per il primo avvio. Lo scorer deterministico `_score_stub` (già presente in v7.1) produce verdetti basati su `pre_risk_score` + segnali BitM/BitM+, sufficiente per demo e ricerca
-- **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/<owner>/bitm-llm` su push/tag. Permette `docker run ghcr.io/<owner>/bitm-llm:latest` da terminale pulito
+- **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/<owner>/aurora` su push/tag. Permette `docker run ghcr.io/<owner>/aurora:latest` da terminale pulito
 - **Test suite**: 41 → 43 casi. Aggiunti **S14 `sys_collector_js_endpoint`** (endpoint `/collector.js`: 200 + MIME JS + stringhe chiave nel body) e **S15 `sys_collector_payload_detects_bitm`** (POST di un payload collector-shaped su una pagina BitM noVNC simulata → verifica che i segnali forti BitM/BitM+ scattino, blocca il drift silenzioso del contratto collector↔extractor)
 
 
@@ -1473,14 +1494,14 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 - **Riferimenti**: Tommasi 2021 (IJIS), Tzschoppe & Löhr 2023 (EuroSec), Catalano 2025 (J. Computer Virology)
 
 ### v7.1.0 — E2E Playwright + CI
-- **E2E Playwright** (`bitm-plugin/tests/e2e_playwright/run_e2e.py`): 7 tecniche di evasione reali (UA rotation, timing sub-human, no-static, stealth patches, canvas noise, WebGL spoof, Tor) eseguite su Chromium headless con init-script e route-blocking
+- **E2E Playwright** (`aurora-plugin/tests/e2e_playwright/run_e2e.py`): 7 tecniche di evasione reali (UA rotation, timing sub-human, no-static, stealth patches, canvas noise, WebGL spoof, Tor) eseguite su Chromium headless con init-script e route-blocking
 - **Metrica di accettazione**: `detection_rate = (challenge+block)/totale`, exit ≠ 0 se < `--min-detection` (default 0.90). Report JSON persistito su disco
-- **CI GitHub Actions** (`.github/workflows/e2e-playwright.yml`): pipeline completa (setup Python → `playwright install chromium` → `run.py` in background → `run_e2e.py` → upload artefatto) su push/PR per `bitm-plugin/**` + `workflow_dispatch` con soglia override
+- **CI GitHub Actions** (`.github/workflows/e2e-playwright.yml`): pipeline completa (setup Python → `playwright install chromium` → `run.py` in background → `run_e2e.py` → upload artefatto) su push/PR per `aurora-plugin/**` + `workflow_dispatch` con soglia override
 - **Backend `stub` scorer** (`app/scorer.py` + `app/config.py`): aggiunto terzo backend deterministico (oltre `anthropic`/`ollama`) per CI e dev senza credenziali. Derivato esclusivamente da `pre_risk_score` + segnali dell'extractor
 
 ### v7.0.0 — Infrastruttura fine-tuning LoRA
 - **System prompt compatto** (`app/scorer.py`): riscrittura del `SYSTEM_PROMPT` in versione v7 — 609 caratteri vs 1080 della v6 (~43% in meno), direttive essenziali preservate, rationale documentato inline
-- **Pipeline dataset** (`training/build_dataset.py`): conversione `bitm_events.jsonl → ChatML` con filtri su cache/errori tecnici, dedup per `(ua, verdict, pre_score)`, split train/val, bilanciamento opzionale per classe
+- **Pipeline dataset** (`training/build_dataset.py`): conversione `aurora_events.jsonl → ChatML` con filtri su cache/errori tecnici, dedup per `(ua, verdict, pre_score)`, split train/val, bilanciamento opzionale per classe
 - **Training LoRA** (`training/train_lora.py`): fine-tuning di LLaMA 3.1 con `transformers + peft + trl.SFTTrainer`, quantizzazione 4-bit NF4 opzionale, target modules LLaMA, gradient checkpointing, import lazy (`--help` funziona senza dipendenze ML installate)
 - **Test suite**: 29 → 32 casi. Aggiunti `S10` (lunghezza prompt + direttive preservate), `S11` (build_dataset su fixture: dedup, filtri, ChatML target JSON parsabile), `S12` (train_lora CLI parseable senza dipendenze ML). Aggiornati header e report a `v7.0`
 

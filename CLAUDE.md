@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository layout
 
-- `bitm-plugin/` — the FastAPI detection service (the only thing that runs in production). All backend commands run from here.
-- `bitm-extension/` — Chrome Manifest V3 extension ("BitM-LLM Shield") that acts as the browser-side collector and shows the block/challenge banner. Loads `src/page-hook.js` in MAIN world at `document_start`, plus a chain of isolated content scripts (`settings → detection → session → banner → content-script`).
+- `aurora-plugin/` — the FastAPI detection service (the only thing that runs in production). All backend commands run from here.
+- `aurora-extension/` — Chrome Manifest V3 extension ("AURORA") that acts as the browser-side collector and shows the block/challenge banner. Loads `src/page-hook.js` in MAIN world at `document_start`, plus a chain of isolated content scripts (`settings → detection → session → banner → content-script`).
 - `tesi/` — thesis material (Italian, University of Bari): `genera_tesi.py` builds `tesi_BitM_LLM.docx` from `Template_Tesi.docx` and the `tesi_figures/*.png` it produces. `tesi/doc/` holds the reference papers. Run with `python tesi/genera_tesi.py`; output is always written next to the script regardless of CWD.
 - `docker-compose.yml` (root) — profiles `api`, `redis`, `ollama` for the full stack.
 
 ## Commands
 
-All commands run from `bitm-plugin/`.
+All commands run from `aurora-plugin/`.
 
 ```bash
 # Install
@@ -38,7 +38,7 @@ The test runner assumes the API is already running on `http://localhost:8000` an
 
 ## Environment
 
-Configuration lives in `bitm-plugin/.env` (see `.env.example`). The most load-bearing variables:
+Configuration lives in `aurora-plugin/.env` (see `.env.example`). The most load-bearing variables:
 
 - `LLM_BACKEND` — `anthropic` or `ollama`. Switches the scorer backend end-to-end.
 - `ANTHROPIC_API_KEY` — required when `LLM_BACKEND=anthropic`; must start with `sk-`.
@@ -61,7 +61,7 @@ HTTP request
   → _fast_rules (app/main.py)                deterministic short-circuit, skips LLM
   → score_session (app/scorer.py)            LLM call (if not short-circuited), with TTL cache
   → decide (app/policy.py)                   final Action + reason
-  → session persist + log_event              JSONL log to bitm_events.jsonl
+  → session persist + log_event              JSONL log to aurora_events.jsonl
   → broadcaster.publish (app/broadcaster.py) fan-out to /ws/events clients
 ```
 
@@ -88,11 +88,11 @@ Resolver is a lazy singleton holding open MaxMind readers. `is_vpn` is inferred 
 
 ### Versioning
 
-Version string lives in three places that must stay in sync: `FastAPI(version=...)` and the `/health` payload in `app/main.py`, plus the README. Current version is `7.4.2`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
+The runtime version string is centralized in `app/__init__.py` (`__version__`) and imported as `AURORA_VERSION` by `app/main.py`. From there it drives `FastAPI(version=...)`, the `/health` payload, the SIEM webhook payload in `app/notifier.py`, and `window.BitM.version` (the `/collector.js` handler substitutes a `__AURORA_VERSION__` placeholder at serve time). The README still carries the version literally — keep it in sync manually when you bump. Current version is `7.4.2`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
 
 ### Logging
 
-Every request ends with `log_event(...)` appending a JSON line to `bitm-plugin/bitm_events.jsonl`. The file is gitignored (it grows on every request and creates merge noise), but it is the source of truth for offline analysis and feeds the dashboard's backlog. `log_event` also returns the entry dict so `main.py` can hand the same payload to the WebSocket broadcaster.
+Every request ends with `log_event(...)` appending a JSON line to `aurora-plugin/aurora_events.jsonl`. The file is gitignored (it grows on every request and creates merge noise), but it is the source of truth for offline analysis and feeds the dashboard's backlog. `log_event` also returns the entry dict so `main.py` can hand the same payload to the WebSocket broadcaster.
 
 ### Real-time dashboard
 

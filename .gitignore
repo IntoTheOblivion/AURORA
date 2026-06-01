@@ -30,8 +30,8 @@ dist/
 .DS_Store
 
 # Project-specific
-bitm-plugin/bitm_events.jsonl
-bitm-plugin/test_report.json
+aurora-plugin/aurora_events.jsonl
+aurora-plugin/test_report.json
 node_modules/
 *.log
 
@@ -40,3 +40,4 @@ tesi/
 
 # Sandbox locale di test attacco BitM (non versionato)
 bitm-attack-sandbox/
+aurora-attack-sandbox/
