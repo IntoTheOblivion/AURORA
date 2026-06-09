@@ -69,10 +69,13 @@ Per usare un LLM reale:
 # Anthropic cloud (richiede API key)
 LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
 
-# Ollama locale (nessun costo ricorrente)
+# Ollama locale (nessun costo ricorrente) — CPU, funziona ovunque
 docker compose --profile ollama up
 docker exec -it aurora-ollama ollama pull llama3.1
 LLM_BACKEND=ollama docker compose --profile ollama up
+
+# ...oppure con GPU NVIDIA (~10x più veloce, richiede nvidia-container-toolkit / WSL2)
+LLM_BACKEND=ollama docker compose --profile ollama-gpu up
 ```
 
 ### B. Integrazione one-liner su un sito esistente
@@ -93,7 +96,7 @@ Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, mark
 docker run --rm -p 8000:8000 ghcr.io/<owner>/aurora:latest
 ```
 
-Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
+Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `tesi/doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
 
 ### D. Protezione lato utente con l'estensione browser
 
@@ -271,13 +274,19 @@ Profili opzionali:
 # Stack completo con Redis (sessioni persistenti multi-worker)
 docker compose --profile redis up
 
-# LLM locale via Ollama (richiede ~4 GB per llama3.1)
+# LLM locale via Ollama — CPU, funziona ovunque (richiede ~4 GB per llama3.1)
 docker compose --profile ollama up
+docker exec -it aurora-ollama ollama pull llama3.1
+
+# LLM locale via Ollama — GPU NVIDIA (~10x più veloce)
+docker compose --profile ollama-gpu up
 docker exec -it aurora-ollama ollama pull llama3.1
 
 # Combinato Redis + Ollama
 docker compose --profile redis --profile ollama up
 ```
+
+> I profili `ollama` (CPU) e `ollama-gpu` (GPU NVIDIA) sono **mutuamente esclusivi**: attivane uno solo. `ollama-gpu` richiede `nvidia-container-toolkit` (Linux) o WSL2 + driver NVIDIA con supporto CUDA-on-WSL (Windows). Espone lo stesso alias di rete `ollama`, quindi l'API continua a usare `OLLAMA_HOST=http://ollama:11434` senza modifiche.
 
 Variabili d'ambiente sovrascrivibili:
 
@@ -366,7 +375,7 @@ Il sistema prova automaticamente i modelli in ordine di preferenza:
 ```env
 REDIS_URL=redis://localhost:6379/0
 REDIS_SESSION_TTL=3600      # TTL sessione in secondi (default 1h)
-REDIS_KEY_PREFIX=bitm:      # prefisso chiavi Redis
+REDIS_KEY_PREFIX=aurora:    # prefisso chiavi Redis
 ```
 
 #### GeoIP
@@ -675,6 +684,7 @@ Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed
 ```json
 {
   "status":              "ok",
+  "service":             "AURORA",
   "version":             "7.4.2",
   "backend":             "ollama",
   "model":               "ollama/llama3.1",
