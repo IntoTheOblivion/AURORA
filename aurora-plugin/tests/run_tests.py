@@ -1346,7 +1346,7 @@ def print_report(cases: list, systems: list) -> dict:
 
     report = {
         "timestamp": datetime.now().isoformat(),
-        "version":   "7.4.2",
+        "version":   "7.4.3",
         "passed":    passed,
         "total":     total,
         "accuracy":  round(passed / total, 3) if total else 0,

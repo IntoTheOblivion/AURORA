@@ -2,12 +2,13 @@
 
 Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)**, automazione malevola e bot non autorizzati. Combina fingerprinting comportamentale del browser, regole deterministiche a latenza zero e un motore LLM (Anthropic Claude o Ollama) per classificare ogni richiesta come `allow`, `challenge` o `block`.
 
-> **Versione corrente: 7.4.2** (runtime) · **Estensione browser v0.2.0** (AURORA, MV3)
+> **Versione corrente: 7.4.3** (runtime) · **Estensione browser v0.2.0** (AURORA, MV3)
 > Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`aurora-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
 > Storico rilasci stabili:
 > - **v0.2** (estensione) — `aurora-extension/` MV3: tre modalità (`off`/`local`/`hybrid`), soglie per-contesto allineate al backend, banner Shadow-DOM i18n (IT/EN), blocklist `declarativeNetRequest` per i tunnel BitM+, storico incidenti nel popup. Default `local`: zero rete, zero storage remoto
 > - **v0.1** (estensione) — prima release MV3: rilevamento locale dei segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab
+> - **v7.4.3** — Robustezza operativa: riconnessione automatica a Redis dopo un outage, TTL + cap sul fallback in-memory, fan-out WebSocket parallelo con timeout, client LLM riusabili con timeout esplicito (30s), lo scoring non produce mai più HTTP 500 (backend mal configurato → verdetto neutro non cachato), clamp degli input client (`sessionId`/`page`/`timing`) e cap di crescita sessione; fix: errori di parse LLM non più cachati, indicators deduplicati, explanation di servizio non più esposte al client
 > - **v7.4.2** — Fix test suite (46/49 → 49/49): soglie latenza ricalibrate (`extreme_latency >600ms`, `high_latency >300ms`, `elevated_latency >150ms`) con etichette stabili allineate a `CRITICAL_BLOCK`/`_AMPLIFIER_WEIGHTS`, short-circuit deterministico del layer trajectory quando la sessione non contiene pattern sensibili (login/admin/change-pw/rapid-nav) → elimina ~1s di round-trip LLM su ogni sessione "noiosa" e rende la cache fingerprint davvero osservabile
 > - **v7.4.1** — Hardening sicurezza: `TRUSTED_PROXIES` per XFF, `ADMIN_TOKEN` sugli endpoint admin/WS/dashboard, fix rate-limit Redis che contava le richieste rifiutate, lifespan FastAPI, allineamento `detection.js` ↔ `extractor.py`, persistenza stato per-tab dell'estensione su `chrome.storage.session`
 > - **v7.4** — Analisi LLM della traiettoria di sessione (pattern post-compromissione) + spiegazioni utente in italiano + banner collector + colonna Pattern dashboard
@@ -616,6 +617,8 @@ python diagnose.py
 }
 ```
 
+Gli input sono clampati lato server (v7.4.3): `sessionId` max 128 caratteri, `page` max 300, `timing` numerico in 0–600000 ms (NaN/inf → 0); valori non-stringa vengono coerciti senza errori. Una sessione conserva al massimo le ultime 200 coppie `pages`/`timings`.
+
 Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed GeoIP reale (non sovrascrive valori già risolti dal resolver, eccetto `is_tor`/`is_vpn` che sono always-true):
 
 ```json
@@ -685,7 +688,7 @@ Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed
 {
   "status":              "ok",
   "service":             "AURORA",
-  "version":             "7.4.2",
+  "version":             "7.4.3",
   "backend":             "ollama",
   "model":               "ollama/llama3.1",
   "trajectory_analysis": true,
@@ -823,11 +826,13 @@ IP privati e loopback (`127.x`, `10.x`, `192.168.x`, `::1`) non producono errori
 
 | Operazione | Redis | In-memory fallback |
 |------------|-------|--------------------|
-| Sessioni | Hash con TTL | `dict` in RAM |
+| Sessioni | Hash con TTL | `dict` in RAM con stesso TTL, cap 5000 sessioni |
 | IP bloccati | Set Redis | `set` in RAM |
-| Rate-limit | Sorted set (zset) sliding window | `deque` per IP |
+| Rate-limit | Sorted set (zset) sliding window | `deque` per IP, cap 10000 IP tracciati |
 
 Se Redis non è raggiungibile all'avvio o durante il run, il sistema degrada automaticamente in-memory senza sollevare eccezioni. Il campo `store` in `/health` indica il backend attivo (`"redis"` o `"memory"`).
+
+**Riconnessione automatica (v7.4.3):** dopo un degrade, lo store ritenta Redis ogni 30 secondi come task in background — nessuna richiesta paga la latenza del tentativo. Alla riconnessione le sessioni accumulate in-memory non vengono migrate (stesso effetto di un riavvio, ma senza downtime). Il fallback in-memory applica TTL ed eviction (le sessioni più vicine alla scadenza vengono scartate oltre il cap), quindi un outage Redis prolungato sotto flood non esaurisce la RAM del processo.
 
 **Escalation automatica:** se la stessa sessione totalizza ≥ 3 BLOCK consecutivi, l'IP sorgente viene aggiunto al set dei bloccati permanenti e ogni richiesta successiva da quell'IP riceve BLOCK istantaneo.
 
@@ -844,6 +849,8 @@ Disponibile a `http://localhost:8000/dashboard`.
 - Export CSV degli eventi in memoria
 
 > **Nota:** il broadcaster è in-process (single-worker). Con `--workers > 1` ogni worker avrebbe il proprio broadcaster; in quel caso promuovere il trasporto a Redis pub/sub.
+
+Il fan-out verso i client WebSocket è parallelo con timeout di 1s per client (5s per il backlog iniziale): un client lento o morto viene scollegato senza rallentare la risposta di `/api/bitm/collect` (v7.4.3).
 
 ---
 
@@ -1107,7 +1114,7 @@ Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` 
 
 | ID | Verifica |
 |----|----------|
-| S01 | `/health` espone `version` (major ≥ 6; runtime attuale 7.4.2), `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
+| S01 | `/health` espone `version` (major ≥ 6; runtime attuale 7.4.3), `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
 | S02 | Sessione multi-step: `request_count` cresce a ogni POST sullo stesso `sessionId` |
 | S03 | IP-block escalation: 3 BLOCK consecutivi → IP nel set bloccati permanenti |
 | S04 | Rate-limit: 40 richieste in rapida successione → almeno una `429` |
@@ -1392,6 +1399,35 @@ console.log(JSON.stringify(self.BitMDetection.detect({
 ---
 
 ## 📦 Changelog
+
+### v7.4.3 — Robustezza operativa + bug fix
+
+Nessun cambio di API né di comportamento di detection: la suite resta 49/49 e i contratti di risposta sono invariati (anzi, più puliti — vedi fix sotto).
+
+**Resilienza Redis** (`app/redis_client.py`)
+- **Riconnessione automatica**: dopo un degrade a in-memory, lo store ritenta Redis ogni 30s (`_RECONNECT_COOLDOWN_S`) come task in background — prima restava in modalità memory fino al riavvio del processo anche quando Redis tornava disponibile. Il tentativo non blocca mai la richiesta che lo innesca (il connect ha timeout 2s e gira fuori dal request path); `close()` annulla eventuali reconnect in volo
+- **Fallback in-memory con TTL e cap**: le sessioni in RAM ora scadono con lo stesso `REDIS_SESSION_TTL` di Redis e sono cappate a 5000 (`_MEM_MAX_SESSIONS`, eviction delle più vicine alla scadenza); il rate-limiter scarta le finestre vuote/scadute oltre 10000 IP tracciati (`_MEM_MAX_RATE_IPS`). Prima un flood con Redis giù cresceva senza limite in RAM
+
+**Lo scoring non produce mai più HTTP 500** (`app/scorer.py`)
+- `score_session` e `analyze_trajectory` catturano qualunque eccezione del backend: con `LLM_BACKEND=anthropic` e API key mancante/invalida a runtime, ogni `/collect` rispondeva 500; ora degrada a verdetto neutro (`backend_unavailable`, score 0.5 SUSPICIOUS) **non cachato**, così il primo retry dopo il fix della config riparte pulito
+- **Client LLM riusabili**: un solo `anthropic.AsyncAnthropic` e un solo `httpx.AsyncClient` (Ollama) per processo — connection pooling invece di un handshake TLS per richiesta. Timeout Anthropic esplicito a 30s (`_ANTHROPIC_TIMEOUT_S`): il default dell'SDK è 600s e avrebbe tenuto appesa una `/collect` per minuti su backend lento. `max_retries=0` lato SDK perché il retry (3 tentativi + backoff) è già gestito nei loop chiamanti
+
+**Fan-out WebSocket non bloccante** (`app/broadcaster.py`)
+- `publish()` è awaited nel request path di `/collect` e inviava ai client in serie senza timeout: un client dashboard lento/morto rallentava le risposte API di tutti. Ora invio parallelo (`asyncio.gather`) con timeout 1s per client (5s per il backlog); chi sfora viene scollegato e chiuso
+
+**Input hardening** (`app/main.py`)
+- `sessionId`/`page` non-stringa (es. un numero) causavano `AttributeError` → 500 su `.strip()`. Ora coercizione `str()` esplicita + clamp: `sessionId` ≤ 128 char, `page` ≤ 300, `timing` float in 0–600000 ms con NaN/inf → 0
+- **Cap di crescita sessione**: `pages`/`timings` conservano le ultime 200 entry (`MAX_SESSION_EVENTS`) — una sessione long-lived non gonfia più all'infinito il payload su Redis/memoria (le feature usano comunque solo le ultime 10)
+
+**Shutdown pulito** (`app/notifier.py`, `app/main.py::lifespan`)
+- Nuova `notifier.shutdown()`: allo stop del server i task webhook in volo vengono drenati (fino a 5s) e poi cancellati, invece di morire con "Task was destroyed but it is pending"
+
+**Bug fix**
+- **Errori di parse LLM non più cachati** (`app/scorer.py::score_session`): `llm_parse_error`, `ollama_parse_error` e `ollama_error` mancavano dalla lista no-cache → una risposta LLM malformata (score neutro 0.5) restava in cache per `CACHE_TTL` e veniva riusata per ogni richiesta con lo stesso fingerprint, in contraddizione con l'invariante "gli errori transitori non si cachano"
+- **Indicators deduplicati** (`app/scorer.py::_score_stub`): `confirmed_signals` e `headless_signals` si sovrappongono (es. `no_languages`) → il client, il log JSONL e i webhook ricevevano indicators duplicati
+- **Explanation di servizio non più esposte** (`app/main.py::_resp`): il filtro sui pattern non-payload (`insufficient_history`, `normal_flow`, `disabled`, `bypassed_fast_rules`) escludeva `trajectory_pattern`/`trajectory_score` ma non le explanation — il client riceveva messaggi diagnostici interni tipo `"Solo 1 pagina(e) in sessione — traiettoria non analizzabile"` come spiegazione di un challenge. Ora le explanation seguono lo stesso filtro
+
+
 
 ### v7.4.2 — Calibrazione soglie latenza + fast path trajectory
 

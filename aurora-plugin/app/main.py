@@ -32,12 +32,19 @@ from app.logger import log_event
 from app.redis_client import get_store
 from app.geoip import resolve as geoip_resolve, summary as geoip_summary
 from app.broadcaster import get_broadcaster
-from app.notifier import notify_block, webhook_status
+from app.notifier import notify_block, webhook_status, shutdown as notifier_shutdown
 
 STATIC_DIR  = Path(__file__).parent / "static"
 RATE_LIMIT  = 30
 RATE_WINDOW = 60
 BLOCK_AFTER = 3
+
+# Clamp degli input client (il payload è JSON arbitrario): limita la crescita
+# di sessioni, log JSONL e prompt LLM sotto input ostili o malformati.
+MAX_SID_LEN        = 128
+MAX_PAGE_LEN       = 300
+MAX_TIMING_MS      = 600_000.0
+MAX_SESSION_EVENTS = 200   # pages/timings conservati per sessione (gli ultimi)
 
 _store       = get_store()
 _broadcaster = get_broadcaster()
@@ -59,6 +66,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await notifier_shutdown()
         await _store.close()
 
 
@@ -192,15 +200,17 @@ async def collect(request: Request, body: dict):
     # stesso NAT hanno fingerprint diversi, quindi non condividono la
     # sessione e i relativi block_count. Collector v7.x fornisce sempre
     # un sessionId, questo è solo il fallback.
-    sid_raw = (body.get("sessionId") or "").strip()
+    # str() esplicito: il payload è JSON arbitrario, un sessionId/page non
+    # stringa (es. numero) non deve produrre un AttributeError → 500.
+    sid_raw = str(body.get("sessionId") or "").strip()[:MAX_SID_LEN]
     if sid_raw:
         sid = sid_raw
     else:
         fp = "|".join([
             ip,
-            (body.get("userAgent") or "")[:200],
-            (body.get("canvas") or "")[:200],
-            ",".join(body.get("languages") or [])[:80],
+            str(body.get("userAgent") or "")[:200],
+            str(body.get("canvas") or "")[:200],
+            ",".join(str(l) for l in (body.get("languages") or []))[:80],
         ])
         sid = "anon-" + hashlib.sha1(fp.encode("utf-8")).hexdigest()[:16]
     store = await _store.get_session(sid)
@@ -209,9 +219,18 @@ async def collect(request: Request, body: dict):
             "pages": [], "timings": [], "first_seen": t0,
             "block_count": 0, "challenge_count": 0,
         }
-    page = (body.get("page") or "/").strip()
+    page = str(body.get("page") or "/").strip()[:MAX_PAGE_LEN] or "/"
+    try:
+        timing = float(body.get("timing") or 0)
+    except (TypeError, ValueError):
+        timing = 0.0
     store["pages"].append(page)
-    store["timings"].append(body.get("timing") or 0)
+    store["timings"].append(max(0.0, min(timing, MAX_TIMING_MS)))
+    # Cap di crescita: una sessione long-lived non deve gonfiare all'infinito
+    # il payload su Redis/memoria (le feature usano comunque le ultime entry).
+    if len(store["pages"]) > MAX_SESSION_EVENTS:
+        store["pages"]   = store["pages"][-MAX_SESSION_EVENTS:]
+        store["timings"] = store["timings"][-MAX_SESSION_EVENTS:]
 
     # Feature extraction
     features = extract_features(body, ip, store, ip_meta=ip_meta)
@@ -350,12 +369,16 @@ def _resp(action: str, score: float, verdict: str, indicators: list,
             payload["trajectory_pattern"] = pattern
             payload["trajectory_score"]   = round(
                 float(trajectory.get("trajectory_score") or 0.0), 3)
-        eu = trajectory.get("explanation_user") or ""
-        ea = trajectory.get("explanation_admin") or ""
-        if eu:
-            payload["explanation_user"]  = eu
-        if ea and action != "allow":
-            payload["explanation_admin"] = ea
+            # Le explanation seguono lo stesso filtro: per i pattern di
+            # servizio sopra conterrebbero messaggi diagnostici interni
+            # (es. "traiettoria non analizzabile") che non devono arrivare
+            # al client come spiegazione dell'azione.
+            eu = trajectory.get("explanation_user") or ""
+            ea = trajectory.get("explanation_admin") or ""
+            if eu:
+                payload["explanation_user"]  = eu
+            if ea and action != "allow":
+                payload["explanation_admin"] = ea
     return JSONResponse(payload, status_code=status)
 
 
