@@ -406,6 +406,22 @@ def notify_block(event: dict[str, Any]) -> None:
     task.add_done_callback(_pending_tasks.discard)
 
 
+async def shutdown(timeout: float = 5.0) -> None:
+    """
+    Drena i task webhook pendenti allo shutdown.
+
+    Senza questo, le notifiche BLOCK in volo al momento dello stop vengono
+    distrutte a metà ("Task was destroyed but it is pending"): diamo loro
+    fino a `timeout` secondi per completare, poi cancelliamo le rimanenti.
+    """
+    pending = [t for t in _pending_tasks if not t.done()]
+    if not pending:
+        return
+    _, still_running = await asyncio.wait(pending, timeout=timeout)
+    for t in still_running:
+        t.cancel()
+
+
 def webhook_status() -> dict[str, Any]:
     """
     Restituisce lo stato corrente del webhook (usato da /health).

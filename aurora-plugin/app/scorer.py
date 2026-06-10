@@ -31,6 +31,32 @@ from app.config import (
 _score_cache: dict       = {}
 _selected_model: str | None = None   # usato solo dal backend Anthropic
 
+# ── Client HTTP riusabili ─────────────────────────────────────────────────────
+# Un client per processo (connection pooling, niente handshake TLS per
+# richiesta). Il timeout Anthropic è esplicito: il default dell'SDK (600s)
+# lascerebbe la richiesta /collect appesa per minuti su un backend lento.
+_ANTHROPIC_TIMEOUT_S = 30.0
+_anthropic_client: anthropic.AsyncAnthropic | None = None
+_ollama_client: httpx.AsyncClient | None = None
+
+
+def _get_anthropic_client() -> anthropic.AsyncAnthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.AsyncAnthropic(
+            api_key=ANTHROPIC_API_KEY,
+            timeout=_ANTHROPIC_TIMEOUT_S,
+            max_retries=0,   # retry gestito esplicitamente nei loop chiamanti
+        )
+    return _anthropic_client
+
+
+def _get_ollama_client() -> httpx.AsyncClient:
+    global _ollama_client
+    if _ollama_client is None:
+        _ollama_client = httpx.AsyncClient(timeout=OLLAMA_TIMEOUT)
+    return _ollama_client
+
 # ── System prompt comune ─────────────────────────────────────────────────────
 # v7.0 — versione compatta (~40% più corta della v6) per ridurre la latenza
 # d'inferenza ed i token in input della cache prompt. Rimosse ridondanze
@@ -279,7 +305,7 @@ async def _score_anthropic(features: dict) -> dict:
             "Oppure imposta LLM_BACKEND=ollama per usare Ollama."
         )
 
-    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    client = _get_anthropic_client()
     model  = await _anthropic_pick_model(client)
     prompt = _build_prompt(features)
     raw    = ""
@@ -358,8 +384,7 @@ async def _score_ollama(features: dict) -> dict:
     raw = ""
     for attempt in range(3):
         try:
-            async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-                resp = await client.post(url, json=payload)
+            resp = await _get_ollama_client().post(url, json=payload)
 
             if resp.status_code != 200:
                 body = resp.text[:200]
@@ -453,7 +478,10 @@ async def _score_stub(features: dict) -> dict:
         "risk_score":  round(min(1.0, max(0.0, score)), 3),
         "verdict":     verdict,
         "confidence":  "high" if confirmed or headless_sig else "low",
-        "indicators":  (confirmed + headless_sig)[:6],
+        # confirmed e headless si sovrappongono (es. no_languages):
+        # dedup preservando l'ordine per non duplicare gli indicators
+        # nella risposta API / log JSONL / webhook.
+        "indicators":  list(dict.fromkeys(confirmed + headless_sig))[:6],
         "explanation": "stub scorer deterministico (pre_risk_score + segnali)",
     }
 
@@ -472,17 +500,25 @@ async def score_session(features: dict) -> dict:
     if cached:
         return {**cached, "_from_cache": True}
 
-    if LLM_BACKEND == "stub":
-        result = await _score_stub(features)
-    elif LLM_BACKEND == "ollama":
-        result = await _score_ollama(features)
-    else:
-        result = await _score_anthropic(features)
+    # Lo scoring non deve MAI propagare: un backend mal configurato
+    # (es. ANTHROPIC_API_KEY assente, nessun modello disponibile) degrada
+    # a verdetto neutro invece di trasformare ogni /collect in un 500.
+    try:
+        if LLM_BACKEND == "stub":
+            result = await _score_stub(features)
+        elif LLM_BACKEND == "ollama":
+            result = await _score_ollama(features)
+        else:
+            result = await _score_anthropic(features)
+    except Exception as e:
+        print(f"[scorer] backend error non gestito: {type(e).__name__}: {e}")
+        return _error(str(e)[:80], "backend_unavailable")
 
     # Caching solo se la risposta non è un errore tecnico
     if result.get("indicators") and result["indicators"][0] in (
         "api_error", "ollama_connection_error", "ollama_timeout",
-        "ollama_http_error", "max_retries", "unknown_error"
+        "ollama_http_error", "ollama_error", "ollama_parse_error",
+        "llm_parse_error", "max_retries", "unknown_error"
     ):
         return result  # non caching degli errori
 
@@ -668,7 +704,7 @@ async def _analyze_trajectory_anthropic(session_state: dict, features: dict) -> 
         return _traj_default(pattern="backend_unavailable",
                              admin="ANTHROPIC_API_KEY mancante")
 
-    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    client = _get_anthropic_client()
     model = await _anthropic_pick_model(client)
     prompt = _build_trajectory_prompt(session_state, features)
     raw = ""
@@ -731,8 +767,7 @@ async def _analyze_trajectory_ollama(session_state: dict, features: dict) -> dic
     raw = ""
     for attempt in range(3):
         try:
-            async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-                resp = await client.post(url, json=payload)
+            resp = await _get_ollama_client().post(url, json=payload)
 
             if resp.status_code != 200:
                 print(f"[scorer/trajectory/ollama] HTTP {resp.status_code} (attempt {attempt+1}/3)")
@@ -835,12 +870,18 @@ async def analyze_trajectory(session_state: dict, features: dict) -> dict:
         _cache_set_traj(cache_key, {**result})
         return result
 
-    if LLM_BACKEND == "stub":
-        result = _analyze_trajectory_stub(session_state, features)
-    elif LLM_BACKEND == "ollama":
-        result = await _analyze_trajectory_ollama(session_state, features)
-    else:
-        result = await _analyze_trajectory_anthropic(session_state, features)
+    # Come score_session: nessuna eccezione deve propagare al request path
+    # (questa coroutine corre in asyncio.gather col fingerprint-scorer).
+    try:
+        if LLM_BACKEND == "stub":
+            result = _analyze_trajectory_stub(session_state, features)
+        elif LLM_BACKEND == "ollama":
+            result = await _analyze_trajectory_ollama(session_state, features)
+        else:
+            result = await _analyze_trajectory_anthropic(session_state, features)
+    except Exception as e:
+        print(f"[scorer/trajectory] backend error non gestito: {type(e).__name__}: {e}")
+        return _traj_default(pattern="backend_unavailable", admin=str(e)[:200])
 
     # Non cachiamo errori backend per poter ritentare rapidamente
     if result.get("pattern") in (

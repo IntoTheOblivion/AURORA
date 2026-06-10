@@ -20,6 +20,11 @@ from typing import Any
 
 from fastapi import WebSocket
 
+# publish() è awaited nel percorso di risposta di /api/bitm/collect: un client
+# WS lento o morto non deve mai trattenere la risposta HTTP oltre questo tempo.
+_SEND_TIMEOUT_S    = 1.0
+_BACKLOG_TIMEOUT_S = 5.0
+
 
 class EventBroadcaster:
     def __init__(self, ring_size: int = 500) -> None:
@@ -27,17 +32,25 @@ class EventBroadcaster:
         self._recent: deque[dict] = deque(maxlen=ring_size)
         self._lock = asyncio.Lock()
 
+    @staticmethod
+    async def _send(ws: WebSocket, msg: str, timeout: float) -> bool:
+        """Invio con timeout; False = client da scartare."""
+        try:
+            await asyncio.wait_for(ws.send_text(msg), timeout=timeout)
+            return True
+        except Exception:
+            return False
+
     async def connect(self, ws: WebSocket) -> None:
         await ws.accept()
         async with self._lock:
             self._clients.add(ws)
         if self._recent:
-            try:
-                await ws.send_text(json.dumps({
-                    "type":   "backlog",
-                    "events": list(self._recent),
-                }))
-            except Exception:
+            msg = json.dumps({
+                "type":   "backlog",
+                "events": list(self._recent),
+            }, default=str)
+            if not await self._send(ws, msg, _BACKLOG_TIMEOUT_S):
                 await self.disconnect(ws)
 
     async def disconnect(self, ws: WebSocket) -> None:
@@ -55,16 +68,21 @@ class EventBroadcaster:
         msg = json.dumps({"type": "event", "event": event}, default=str)
         async with self._lock:
             targets = list(self._clients)
-        dead: list[WebSocket] = []
-        for ws in targets:
-            try:
-                await ws.send_text(msg)
-            except Exception:
-                dead.append(ws)
+        # Fan-out parallelo: il tempo di publish è max(timeout singolo),
+        # non la somma dei client — e nessun client può superare il timeout.
+        results = await asyncio.gather(
+            *(self._send(ws, msg, _SEND_TIMEOUT_S) for ws in targets)
+        )
+        dead = [ws for ws, ok in zip(targets, results) if not ok]
         if dead:
             async with self._lock:
                 for ws in dead:
                     self._clients.discard(ws)
+            for ws in dead:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
 
     @property
     def client_count(self) -> int:

@@ -80,7 +80,7 @@ Both backends share `SYSTEM_PROMPT`, `_build_prompt`, `_parse_llm_response`, `_v
 
 ### Session store (`app/redis_client.py`)
 
-`SessionStore` is a single class that transparently switches between Redis and in-memory state. Every Redis method has an `except → self._connected = False → fall through to memory` branch, so a Redis outage mid-run degrades instead of raising. The `backend` property (`"redis"` / `"memory"`) is what `/health` and `/api/bitm/sessions` report. Rate-limit uses a Redis sorted-set sliding window (`zremrangebyscore` + `zcard` + `zadd` + `expire` in one pipeline); the in-memory fallback uses a `deque` per IP.
+`SessionStore` is a single class that transparently switches between Redis and in-memory state. Every Redis method has an `except → self._connected = False → fall through to memory` branch, so a Redis outage mid-run degrades instead of raising; hot-path methods call `_maybe_reconnect()`, which retries Redis every 30s as a background task (never inline — the connect timeout must not land on a request). The `backend` property (`"redis"` / `"memory"`) is what `/health` and `/api/bitm/sessions` report. Rate-limit uses a Redis sorted-set sliding window (`zremrangebyscore` + `zcard` + `zadd` + `expire` in one pipeline); the in-memory fallback uses a `deque` per IP. The in-memory fallback enforces the session TTL plus hard caps (`_MEM_MAX_SESSIONS`, `_MEM_MAX_RATE_IPS`) so a flood with Redis down cannot exhaust process memory.
 
 ### GeoIP (`app/geoip.py`)
 
@@ -88,7 +88,7 @@ Resolver is a lazy singleton holding open MaxMind readers. `is_vpn` is inferred 
 
 ### Versioning
 
-The runtime version string is centralized in `app/__init__.py` (`__version__`) and imported as `AURORA_VERSION` by `app/main.py`. From there it drives `FastAPI(version=...)`, the `/health` payload, the SIEM webhook payload in `app/notifier.py`, and `window.BitM.version` (the `/collector.js` handler substitutes a `__AURORA_VERSION__` placeholder at serve time). The README still carries the version literally — keep it in sync manually when you bump. Current version is `7.4.2`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
+The runtime version string is centralized in `app/__init__.py` (`__version__`) and imported as `AURORA_VERSION` by `app/main.py`. From there it drives `FastAPI(version=...)`, the `/health` payload, the SIEM webhook payload in `app/notifier.py`, and `window.BitM.version` (the `/collector.js` handler substitutes a `__AURORA_VERSION__` placeholder at serve time). The README still carries the version literally — keep it in sync manually when you bump. Current version is `7.4.3`. The test suite's S01 asserts `/health` exposes a `version` field — update the assertion's expected prefix in `tests/run_tests.py` if you bump the major.
 
 ### Logging
 

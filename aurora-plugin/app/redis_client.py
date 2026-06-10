@@ -18,6 +18,7 @@ l'event loop.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections import defaultdict, deque
@@ -31,11 +32,24 @@ except Exception:
 
 from app.config import REDIS_URL, REDIS_SESSION_TTL, REDIS_KEY_PREFIX
 
+# Riconnessione automatica: dopo un degrade a in-memory, ritenta Redis al
+# massimo una volta ogni cooldown (lazy, sul percorso caldo). Senza questo
+# un'interruzione Redis mid-run lascerebbe lo store in modalità memory fino
+# al riavvio del processo anche quando Redis torna disponibile.
+_RECONNECT_COOLDOWN_S = 30.0
+
+# Limiti del fallback in-memory: senza TTL né cap, un flood con Redis giù
+# (o in deployment senza Redis) esaurirebbe la memoria del processo.
+_MEM_MAX_SESSIONS = 5000
+_MEM_MAX_RATE_IPS = 10000
+_MEM_PRUNE_EVERY_S = 60.0
+
 
 class SessionStore:
     """
     Store unificato per sessioni, blocked-IP e rate-limit.
-    Tenta Redis; in caso di fallimento fallback a dict/deque in-memory.
+    Tenta Redis; in caso di fallimento fallback a dict/deque in-memory,
+    con ritentativi periodici di riconnessione.
     """
 
     def __init__(
@@ -49,15 +63,20 @@ class SessionStore:
         self._prefix = prefix
         self._client: Any | None = None
         self._connected = False
+        self._last_connect_attempt = 0.0
+        self._reconnect_task: Any | None = None
 
         # Fallback in-memory
         self._mem_sessions: dict[str, dict] = {}
+        self._mem_expiry:   dict[str, float] = {}
         self._mem_blocked:  set[str]        = set()
         self._mem_rate:     dict[str, deque] = defaultdict(deque)
+        self._next_mem_prune = 0.0
 
     # ── Connection lifecycle ─────────────────────────────────────────────
 
     async def connect(self) -> bool:
+        self._last_connect_attempt = time.time()
         if not _REDIS_AVAILABLE:
             print("[redis] client non installato, uso fallback in-memory")
             return False
@@ -77,6 +96,9 @@ class SessionStore:
             return False
 
     async def close(self) -> None:
+        # Un reconnect in volo dopo close() riaprirebbe il client: annulla.
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
         if self._client is not None:
             try:
                 await self._client.close()
@@ -93,6 +115,44 @@ class SessionStore:
     def backend(self) -> str:
         return "redis" if self._connected else "memory"
 
+    def _maybe_reconnect(self) -> None:
+        """Ritenta Redis dopo un degrade, rispettando il cooldown.
+
+        Il tentativo parte come task in background: la richiesta che lo
+        innesca NON paga la latenza del connect (fino a 2s di timeout).
+        Le sessioni accumulate in-memory durante l'outage non vengono
+        migrate: alla riconnessione ripartono da Redis (stesso effetto di
+        un riavvio del processo, ma senza downtime).
+        """
+        if self._connected or not _REDIS_AVAILABLE:
+            return
+        now = time.time()
+        if now - self._last_connect_attempt < _RECONNECT_COOLDOWN_S:
+            return
+        self._last_connect_attempt = now
+        try:
+            # Ref forte sul task: evita il GC del task in volo.
+            self._reconnect_task = asyncio.create_task(self.connect())
+        except RuntimeError:
+            pass  # nessun event loop attivo (uso sincrono ad es. nei test)
+
+    # ── Fallback in-memory: pruning ──────────────────────────────────────
+
+    def _mem_prune(self, force: bool = False) -> None:
+        """Applica TTL e cap al fallback in-memory (best-effort, periodico)."""
+        now = time.time()
+        if not force and now < self._next_mem_prune:
+            return
+        self._next_mem_prune = now + _MEM_PRUNE_EVERY_S
+        for sid in [s for s, exp in self._mem_expiry.items() if exp <= now]:
+            self._mem_sessions.pop(sid, None)
+            self._mem_expiry.pop(sid, None)
+        # Cap duro: scarta le sessioni più vicine alla scadenza
+        while len(self._mem_sessions) > _MEM_MAX_SESSIONS and self._mem_expiry:
+            oldest = min(self._mem_expiry, key=self._mem_expiry.get)
+            self._mem_sessions.pop(oldest, None)
+            self._mem_expiry.pop(oldest, None)
+
     # ── Key helpers ──────────────────────────────────────────────────────
 
     def _k_session(self, sid: str) -> str: return f"{self._prefix}session:{sid}"
@@ -102,6 +162,7 @@ class SessionStore:
     # ── Sessions ─────────────────────────────────────────────────────────
 
     async def get_session(self, sid: str) -> dict | None:
+        self._maybe_reconnect()
         if self._connected:
             try:
                 raw = await self._client.get(self._k_session(sid))
@@ -109,6 +170,11 @@ class SessionStore:
             except Exception as e:
                 print(f"[redis] get_session degraded: {e}")
                 self._connected = False
+        exp = self._mem_expiry.get(sid)
+        if exp is not None and exp <= time.time():
+            self._mem_sessions.pop(sid, None)
+            self._mem_expiry.pop(sid, None)
+            return None
         return self._mem_sessions.get(sid)
 
     async def set_session(self, sid: str, data: dict) -> None:
@@ -123,7 +189,9 @@ class SessionStore:
             except Exception as e:
                 print(f"[redis] set_session degraded: {e}")
                 self._connected = False
+        self._mem_prune()
         self._mem_sessions[sid] = data
+        self._mem_expiry[sid] = time.time() + self._ttl
 
     async def clear_sessions(self) -> int:
         count = 0
@@ -138,6 +206,7 @@ class SessionStore:
                 self._connected = False
         count += len(self._mem_sessions)
         self._mem_sessions.clear()
+        self._mem_expiry.clear()
         return count
 
     async def session_count(self) -> int:
@@ -151,6 +220,7 @@ class SessionStore:
             except Exception as e:
                 print(f"[redis] session_count degraded: {e}")
                 self._connected = False
+        self._mem_prune(force=True)
         return len(self._mem_sessions)
 
     async def recent_sessions(self, limit: int = 20) -> dict[str, dict]:
@@ -177,6 +247,7 @@ class SessionStore:
             except Exception as e:
                 print(f"[redis] recent_sessions degraded: {e}")
                 self._connected = False
+        self._mem_prune(force=True)
         for sid, store in list(self._mem_sessions.items())[-limit:]:
             out[sid] = store
         return out
@@ -184,6 +255,7 @@ class SessionStore:
     # ── Blocked IPs ──────────────────────────────────────────────────────
 
     async def is_blocked(self, ip: str) -> bool:
+        self._maybe_reconnect()
         if self._connected:
             try:
                 return bool(await self._client.sismember(self._k_blocked(), ip))
@@ -240,6 +312,7 @@ class SessionStore:
         per evitare che richieste rifiutate gonfino la finestra e causino
         rigetti futuri. Comportamento allineato al ramo in-memory.
         """
+        self._maybe_reconnect()
         now = time.time()
         cutoff = now - window_s
 
@@ -265,6 +338,14 @@ class SessionStore:
             except Exception as e:
                 print(f"[redis] rate_check degraded: {e}")
                 self._connected = False
+
+        # Cap sul numero di IP tracciati: scarta le finestre ormai vuote o
+        # interamente scadute prima di accettarne di nuove (anti-flood di
+        # IP spoofati quando il fallback in-memory è attivo).
+        if len(self._mem_rate) > _MEM_MAX_RATE_IPS:
+            for stale in [k for k, dq in self._mem_rate.items()
+                          if not dq or dq[-1] < cutoff]:
+                del self._mem_rate[stale]
 
         window = self._mem_rate[ip]
         while window and window[0] < cutoff:
