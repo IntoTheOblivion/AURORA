@@ -57,7 +57,7 @@ Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvi
 ### A. Provalo subito con Docker (~30 secondi)
 
 ```bash
-git clone <repo-url> && cd AURORA
+git clone https://github.com/IntoTheOblivion/AURORA.git && cd AURORA
 docker compose up --build
 ```
 
@@ -94,10 +94,10 @@ Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, mark
 ### C. Ricercatori e studenti
 
 ```bash
-docker run --rm -p 8000:8000 ghcr.io/<owner>/aurora:latest
+docker run --rm -p 8000:8000 ghcr.io/intotheoblivion/aurora:latest
 ```
 
-Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento sono in `tesi/doc/` (Tommasi 2021, Tzschoppe 2023, Catalano 2025).
+Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento (Tommasi 2021, Tzschoppe 2023, Catalano 2025) sono citati in §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm-v72).
 
 ### D. Protezione lato utente con l'estensione browser
 
@@ -259,7 +259,7 @@ Le due modalità di installazione del backend — **Docker** e **Python locale**
 **Prerequisiti**: Docker Desktop ≥ 24 o Docker Engine + docker-compose plugin.
 
 ```bash
-git clone <repo-url> && cd AURORA
+git clone https://github.com/IntoTheOblivion/AURORA.git && cd AURORA
 docker compose up --build
 ```
 
@@ -1226,7 +1226,7 @@ Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici princi
 - `aurora-plugin/.dockerignore` — esclude `__pycache__/`, `.env`, `tests/`, `doc/`, `aurora_events.jsonl`, artefatti IDE
 - `docker-compose.yml` (root) — servizio `api` di default + profili opzionali `redis` e `ollama`
 - `aurora-plugin/app/static/collector.js` — collector vanilla JS (~140 righe, nessuna dipendenza), legge `data-endpoint`/`data-page`/`data-auto` dal tag `<script>`, espone `window.BitM`
-- `.github/workflows/docker-publish.yml` — build multi-arch (`amd64`/`arm64`) + push su `ghcr.io/<owner>/aurora:{latest,sha-...,vX.Y.Z}` a ogni push su `master`/tag `v*`
+- `.github/workflows/docker-publish.yml` — build multi-arch (`amd64`/`arm64`) + push su `ghcr.io/intotheoblivion/aurora:{latest,sha-...,vX.Y.Z}` a ogni push su `master`/tag `v*`
 
 ### File modificati
 
@@ -1527,7 +1527,7 @@ Version bump `7.4.0 → 7.4.2` in `main.py` (`FastAPI(version=...)` + `/health`)
 - **Docker** (`aurora-plugin/Dockerfile`, `.dockerignore`, `docker-compose.yml` in root): onboarding via `docker compose up` senza dipendenze Python locali. Profili opzionali `redis` e `ollama` per stack avanzato
 - **Collector standalone** (`aurora-plugin/app/static/collector.js` + `GET /collector.js` in `app/main.py`): integrazione one-liner via `<script src=".../collector.js" data-endpoint="..." data-auto="true">`. Espone `window.BitM` con `classify()`, `fingerprint()`, `onResult(fn)`
 - **Default `LLM_BACKEND=stub`** (`app/config.py`): eliminata la necessità di una API key per il primo avvio. Lo scorer deterministico `_score_stub` (già presente in v7.1) produce verdetti basati su `pre_risk_score` + segnali BitM/BitM+, sufficiente per demo e ricerca
-- **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/<owner>/aurora` su push/tag. Permette `docker run ghcr.io/<owner>/aurora:latest` da terminale pulito
+- **Workflow GHCR** (`.github/workflows/docker-publish.yml`): build multi-arch (amd64/arm64) + push a `ghcr.io/intotheoblivion/aurora` su push/tag. Permette `docker run ghcr.io/intotheoblivion/aurora:latest` da terminale pulito
 - **Test suite**: 41 → 43 casi. Aggiunti **S14 `sys_collector_js_endpoint`** (endpoint `/collector.js`: 200 + MIME JS + stringhe chiave nel body) e **S15 `sys_collector_payload_detects_bitm`** (POST di un payload collector-shaped su una pagina BitM noVNC simulata → verifica che i segnali forti BitM/BitM+ scattino, blocca il drift silenzioso del contratto collector↔extractor)
 
 
