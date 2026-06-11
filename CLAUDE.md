@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `aurora-plugin/` — the FastAPI detection service (the only thing that runs in production). All backend commands run from here.
 - `aurora-extension/` — Chrome Manifest V3 extension ("AURORA") that acts as the browser-side collector and shows the block/challenge banner. Loads `src/page-hook.js` in MAIN world at `document_start`, plus a chain of isolated content scripts (`settings → detection → session → banner → content-script`).
-- `tesi/` — thesis material (Italian, University of Bari): `genera_tesi.py` builds `tesi_BitM_LLM.docx` from `Template_Tesi.docx` and the `tesi_figures/*.png` it produces. `tesi/doc/` holds the reference papers. Run with `python tesi/genera_tesi.py`; output is always written next to the script regardless of CWD.
+- `tesi/` — thesis material (Italian, University of Bari): `genera_tesi.py` builds `output/tesi_AURORA.docx` from `Template_Tesi.docx` and the `figures/*.png` it produces. `tesi/doc/` holds the reference papers, `tesi/revisioni/` the advisor-revised copies, `tesi/output/` the generated docx (also `PREPARAZIONE_ORALI.docx` from `genera_preparazione_orali.py`). Run with `python tesi/genera_tesi.py`; output paths are anchored to the script location regardless of CWD.
 - `docker-compose.yml` (root) — profiles `api`, `redis`, `ollama` for the full stack.
 
 ## Commands
