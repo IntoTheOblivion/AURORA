@@ -5,52 +5,57 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 > **Versione corrente: 7.4.3** (runtime) · **Estensione browser v0.2.0** (AURORA, MV3)
 > Tre modalità di deploy coordinate: (1) backend server-side via `docker compose up` o `python run.py`; (2) integrazione one-liner `<script src="…/collector.js">` su un sito esistente; (3) estensione browser stand-alone (`aurora-extension/`) per la protezione lato utente su qualsiasi sito. Default `LLM_BACKEND=stub` → nessuna API key richiesta per il primo avvio.
 >
-> Storico rilasci stabili:
-> - **v0.2** (estensione) — `aurora-extension/` MV3: tre modalità (`off`/`local`/`hybrid`), soglie per-contesto allineate al backend, banner Shadow-DOM i18n (IT/EN), blocklist `declarativeNetRequest` per i tunnel BitM+, storico incidenti nel popup. Default `local`: zero rete, zero storage remoto
-> - **v0.1** (estensione) — prima release MV3: rilevamento locale dei segnali BitM/BitM+, banner in-page, blocco submit su form con password, badge per-tab
-> - **v7.4.3** — Robustezza operativa: riconnessione automatica a Redis dopo un outage, TTL + cap sul fallback in-memory, fan-out WebSocket parallelo con timeout, client LLM riusabili con timeout esplicito (30s), lo scoring non produce mai più HTTP 500 (backend mal configurato → verdetto neutro non cachato), clamp degli input client (`sessionId`/`page`/`timing`) e cap di crescita sessione; fix: errori di parse LLM non più cachati, indicators deduplicati, explanation di servizio non più esposte al client
-> - **v7.4.2** — Fix test suite (46/49 → 49/49): soglie latenza ricalibrate (`extreme_latency >600ms`, `high_latency >300ms`, `elevated_latency >150ms`) con etichette stabili allineate a `CRITICAL_BLOCK`/`_AMPLIFIER_WEIGHTS`, short-circuit deterministico del layer trajectory quando la sessione non contiene pattern sensibili (login/admin/change-pw/rapid-nav) → elimina ~1s di round-trip LLM su ogni sessione "noiosa" e rende la cache fingerprint davvero osservabile
-> - **v7.4.1** — Hardening sicurezza: `TRUSTED_PROXIES` per XFF, `ADMIN_TOKEN` sugli endpoint admin/WS/dashboard, fix rate-limit Redis che contava le richieste rifiutate, lifespan FastAPI, allineamento `detection.js` ↔ `extractor.py`, persistenza stato per-tab dell'estensione su `chrome.storage.session`
-> - **v7.4** — Analisi LLM della traiettoria di sessione (pattern post-compromissione) + spiegazioni utente in italiano + banner collector + colonna Pattern dashboard
-> - **v7.3** — Dockerfile + docker-compose + workflow GHCR + collector.js standalone + default `LLM_BACKEND=stub` + S14
-> - **v7.2** — Rilevamento stack BitM / BitM+ (noVNC/Websockify/Guacamole + ngrok/MalSrv/evilGet), T21–T29, S13
-> - **v7.1** — Suite E2E Playwright + workflow GitHub Actions + backend `stub` deterministico
-> - **v7.0** — Infrastruttura fine-tuning LoRA per LLaMA 3.1 + system prompt compatto (~40% più corto)
-> - **v6.2** — Webhook push notifications (Slack / Teams / SIEM) per eventi BLOCK, retry esponenziale
+> 🏛 **Architettura** → [Architettura del sistema](#-architettura-del-sistema): diagrammi di contesto, servizi, componenti e sequenza runtime.
+> 📜 **Storico rilasci** → [Changelog](#-changelog) in fondo al documento.
 
 ---
 
 ## Indice
 
-- [⚡ Quickstart](#-quickstart-v73)
+**Panoramica**
 - [Caratteristiche](#-caratteristiche)
-- [Come funziona](#-come-funziona)
+- [Architettura del sistema](#-architettura-del-sistema)
+- [Come funziona — il flusso di una richiesta](#-come-funziona--il-flusso-di-una-richiesta)
+
+**Uso**
+- [Quickstart](#-quickstart)
 - [Struttura del progetto](#-struttura-del-progetto)
 - [Requisiti](#-requisiti)
 - [Installazione & Setup](#-installazione--setup)
 - [Avvio](#-avvio)
+
+**Riferimento API**
 - [Payload e risposta API](#-payload-e-risposta-api)
 - [Endpoints](#-endpoints)
+
+**Modello di detection**
 - [Segnali rilevati](#-segnali-rilevati)
 - [Soglie e politica decisionale](#-soglie-e-politica-decisionale)
+- [Rilevamento BitM / BitM+](#-rilevamento-bitm--bitm)
+- [Analisi LLM della traiettoria](#-analisi-llm-della-traiettoria)
+
+**Operazioni**
 - [Sicurezza e deployment hardening](#-sicurezza-e-deployment-hardening)
 - [GeoIP](#-geoip)
 - [Sessioni e Redis](#-sessioni-e-redis)
 - [Dashboard real-time](#-dashboard-real-time)
-- [Webhook push notifications](#-webhook-push-notifications-v62)
+- [Webhook push notifications](#-webhook-push-notifications)
 - [Log eventi](#-log-eventi)
-- [Fine-tuning LoRA (v7.0)](#-fine-tuning-lora-v70)
-- [E2E Playwright + CI (v7.1)](#-e2e-playwright--ci-v71)
+
+**Sviluppo & distribuzione**
 - [Test](#-test)
-- [Rilevamento BitM / BitM+ (v7.2)](#-rilevamento-bitm--bitm-v72)
-- [Distribuzione Docker + collector.js (v7.3)](#-distribuzione-docker--collectorjs-v73)
-- [Analisi LLM della traiettoria (v7.4)](#-analisi-llm-della-traiettoria-v74)
-- [Estensione browser AURORA (v0.2)](#-estensione-browser-aurora-v02)
+- [E2E Playwright + CI](#-e2e-playwright--ci)
+- [Distribuzione Docker + collector.js](#-distribuzione-docker--collectorjs)
+- [Fine-tuning LoRA](#-fine-tuning-lora)
+
+**Client**
+- [Estensione browser AURORA](#-estensione-browser-aurora)
+
 - [Changelog](#-changelog)
 
 ---
 
-## ⚡ Quickstart (v7.3)
+## ⚡ Quickstart
 
 Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvio grazie al backend `stub` deterministico.
 
@@ -97,7 +102,7 @@ Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, mark
 docker run --rm -p 8000:8000 ghcr.io/intotheoblivion/aurora:latest
 ```
 
-Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento (Tommasi 2021, Tzschoppe 2023, Catalano 2025) sono citati in §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm-v72).
+Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento (Tommasi 2021, Tzschoppe 2023, Catalano 2025) sono citati in §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm).
 
 ### D. Protezione lato utente con l'estensione browser
 
@@ -107,7 +112,7 @@ Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), 
 2. Attiva "Modalità sviluppatore" in alto a destra
 3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `aurora-extension/`
 
-In modalità `local` (default) l'estensione gira 100% lato client: nessuna connessione al backend, nessun dato inviato in rete. La modalità `hybrid` (opt-in) può invece interrogare il backend per spiegazioni LLM. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora-v02) per il dettaglio.
+In modalità `local` (default) l'estensione gira 100% lato client: nessuna connessione al backend, nessun dato inviato in rete. La modalità `hybrid` (opt-in) può invece interrogare il backend per spiegazioni LLM. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora) per il dettaglio.
 
 ---
 
@@ -133,7 +138,136 @@ In modalità `local` (default) l'estensione gira 100% lato client: nessuna conne
 
 ---
 
-## 🔍 Come funziona
+## 🏛 Architettura del sistema
+
+AURORA non è un singolo blocco monolitico: è un **insieme di servizi cooperanti** in stile *microservices*, dove ogni capability — **stato di sessione**, **inferenza LLM**, **GeoIP**, **notifica** — è un servizio indipendente e sostituibile (puoi scambiare Anthropic con Ollama, o Redis con il fallback in-memory, senza toccare il resto). Il **Detection Service** (FastAPI) fa da orchestratore e delega a questi servizi dedicati; due collector lato client raccolgono il fingerprint del browser e lo inviano al backend.
+
+| Servizio | Responsabilità | Tecnologia | Dove gira |
+|----------|----------------|-----------|-----------|
+| **Detection / API Service** | Orchestrazione della pipeline, decisione `allow`/`challenge`/`block` | FastAPI (`app/main.py`) | container `aurora-api` |
+| **Session & State Service** | Sessioni multi-step, rate-limit, IP bloccati | Redis (+ fallback in-memory) | container `aurora-redis` |
+| **LLM Scoring Service** | Scoring del fingerprint + analisi traiettoria | Ollama / Anthropic | locale o cloud |
+| **GeoIP Service** | Country / ASN / VPN a partire dall'IP | MaxMind GeoLite2 | in-process (file `.mmdb`) |
+| **Notification Service** | Alert push sugli eventi BLOCK | Webhook → Slack / Teams / SIEM | in-process → endpoint remoto |
+| **Dashboard real-time** | Feed eventi live per l'analista | WebSocket + HTML/JS | servita da `aurora-api` |
+| **Collector `collector.js`** | Fingerprint lato sito protetto | JS one-liner | nel sito da proteggere |
+| **Estensione AURORA** | Detection lato utente su qualunque sito | Chrome MV3 | nel browser dell'utente |
+
+I tre diagrammi seguono il **modello C4**, dal più astratto al più concreto: **contesto** (chi parla con AURORA) → **servizi** (come cooperano) → **componenti** (cosa c'è dentro l'API). Il flusso a runtime è in [Come funziona](#-come-funziona--il-flusso-di-una-richiesta).
+
+### Vista di contesto
+
+Chi usa AURORA e con quali sistemi esterni dialoga.
+
+```mermaid
+flowchart TB
+    user(["Utente / Browser"])
+    site["Sito web protetto"]
+    analyst(["Analista di sicurezza"])
+
+    subgraph aurora["AURORA — Detection BitM"]
+        core["Servizi AURORA"]
+    end
+
+    llm[("LLM Provider<br/>Anthropic / Ollama")]
+    geo[("MaxMind GeoLite2")]
+    siem[("SIEM / Slack / Teams")]
+
+    user -->|naviga| site
+    site -->|"fingerprint via collector.js"| core
+    user -. "estensione browser" .-> core
+    analyst -->|"dashboard / admin"| core
+    core -->|"scoring"| llm
+    core -->|"lookup IP"| geo
+    core -->|"alert su BLOCK"| siem
+```
+
+### I servizi del sistema
+
+Come i servizi cooperano e con quali protocolli. Il Detection Service è l'unico punto d'ingresso: tutto il resto è uno stato, un'inferenza o una notifica delegata.
+
+```mermaid
+flowchart LR
+    subgraph client["Lato client"]
+        collector["collector.js<br/>(sito protetto)"]
+        ext["Estensione AURORA<br/>(MV3, browser)"]
+    end
+
+    subgraph backend["Servizi AURORA"]
+        api["Detection / API Service<br/>FastAPI · app/main.py"]
+        dash["Dashboard real-time<br/>WebSocket /ws/events"]
+    end
+
+    subgraph support["Servizi di supporto"]
+        redis[("Sessioni e Stato<br/>Redis")]
+        llm["LLM Scoring<br/>Ollama / Anthropic"]
+        geo["GeoIP<br/>MaxMind GeoLite2"]
+        notify["Notification<br/>Slack / Teams / SIEM"]
+    end
+
+    collector -->|"POST /api/bitm/collect"| api
+    ext -. "hybrid mode" .-> api
+    api -->|"sessioni · rate-limit"| redis
+    api -->|"score_session()"| llm
+    api -->|"country · ASN"| geo
+    api -->|"webhook su BLOCK"| notify
+    api -->|"publish evento"| dash
+```
+
+### Componenti dell'API service
+
+Dentro il Detection Service: i moduli attraversati da ogni richiesta, nell'ordine. Il rombo `_fast_rules` è lo *short-circuit* deterministico che, su un segnale critico, salta del tutto la chiamata LLM.
+
+```mermaid
+flowchart TB
+    req["POST /api/bitm/collect"] --> mw["GeoIP middleware<br/>main.py"]
+    mw --> rate["rate_check<br/>redis_client.py"]
+    rate --> blocked["is_blocked<br/>redis_client.py"]
+    blocked --> sess["session load / merge<br/>redis_client.py"]
+    sess --> extract["extract_features<br/>extractor.py"]
+    extract --> fast{"_fast_rules<br/>main.py"}
+    fast -->|"segnale critico<br/>(skip LLM)"| policy["decide<br/>policy.py"]
+    fast -->|"nessun match"| scorer["score_session<br/>scorer.py (LLM)"]
+    scorer --> policy
+    policy --> persist["persist + log_event<br/>redis_client.py · logger.py"]
+    persist --> broad["broadcaster.publish<br/>broadcaster.py"]
+    broad --> notif["notify_block<br/>notifier.py"]
+    notif --> resp["risposta JSON"]
+```
+
+---
+
+## 🔍 Come funziona — il flusso di una richiesta
+
+Una singola `POST /api/bitm/collect`, dal fingerprint alla decisione. Il ramo `alt` mostra la differenza tra il *fast path* deterministico (LLM saltato) e lo scoring LLM completo.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as collector.js
+    participant API as API Service
+    participant R as Redis
+    participant X as extractor.py
+    participant L as LLM Scoring
+    participant P as policy.py
+    participant D as Dashboard / SIEM
+
+    C->>API: POST /api/bitm/collect (fingerprint)
+    API->>R: rate_check + is_blocked
+    API->>R: load / merge sessione
+    API->>X: extract_features() → pre_risk_score, signals
+    alt Segnale critico (fast rule)
+        API->>P: decide() — BLOCK, LLM saltato
+    else Nessun segnale critico
+        API->>L: score_session(features)
+        L-->>API: risk_score, verdict, indicators
+        API->>P: decide() — floor + boost + soglie
+    end
+    P-->>API: action + reason
+    API->>R: persist sessione (+ escalation IP)
+    API->>D: publish WS + webhook se BLOCK
+    API-->>C: { action, score, verdict, indicators, ... }
+```
 
 Ogni richiesta a `/api/bitm/collect` attraversa questa pipeline nell'ordine:
 
@@ -396,7 +530,7 @@ Se omessi, il sistema funziona normalmente senza arricchimento GeoIP.
 CACHE_TTL=300    # secondi (default 5 minuti)
 ```
 
-#### Sicurezza (v7.4.1)
+#### Sicurezza
 
 ```env
 # Reverse proxy fidati: CSV di IP/CIDR. Senza, XFF è ignorato.
@@ -408,7 +542,7 @@ ADMIN_TOKEN=change-me-in-production
 
 Dettagli: §[Sicurezza e deployment hardening](#-sicurezza-e-deployment-hardening).
 
-#### Webhook (v6.2)
+#### Webhook
 
 ```env
 # Slack (Blocks API)
@@ -458,7 +592,7 @@ Lo script prova a connettersi al backend LLM configurato e stampa un report (mod
 
 L'estensione è **indipendente** dal backend: gira 100% lato client, non fa alcuna chiamata di rete verso il server BitM.
 
-**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora-v02)).
+**Prerequisiti**: Chrome ≥ 111 o Edge ≥ 111 (per il supporto `content_scripts.world: "MAIN"` richiesto da MV3). Firefox richiede una build separata (vedi [Limitazioni](#-estensione-browser-aurora)).
 
 #### C.1 — Installazione in modalità sviluppatore
 
@@ -627,7 +761,7 @@ Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed
 }
 ```
 
-**Campi opzionali per il rilevamento BitM/BitM+ (v7.2)** — se il collector lato sito li fornisce, entrano nelle firme; se mancano vengono semplicemente ignorati (vedi §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm-v72)):
+**Campi opzionali per il rilevamento BitM/BitM+ (v7.2)** — se il collector lato sito li fornisce, entrano nelle firme; se mancano vengono semplicemente ignorati (vedi §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm)):
 
 ```json
 {
@@ -854,7 +988,7 @@ Il fan-out verso i client WebSocket è parallelo con timeout di 1s per client (5
 
 ---
 
-## 📡 Webhook push notifications (v6.2)
+## 📡 Webhook push notifications
 
 `app/notifier.py` intercetta ogni azione `BLOCK` e invia una notifica HTTP POST non bloccante.
 
@@ -934,7 +1068,7 @@ Ogni richiesta produce una riga JSON in `aurora_events.jsonl`:
 
 ---
 
-## 🎓 Fine-tuning LoRA (v7.0)
+## 🎓 Fine-tuning LoRA
 
 La cartella `aurora-plugin/training/` contiene l'infrastruttura per specializzare LLaMA 3.1 sulle decisioni dello scorer, riducendo progressivamente la dipendenza da backend cloud.
 
@@ -1000,7 +1134,7 @@ L'adapter salvato è caricabile a runtime con `peft.PeftModel.from_pretrained(ba
 
 ---
 
-## 🎭 E2E Playwright + CI (v7.1)
+## 🎭 E2E Playwright + CI
 
 La suite `aurora-plugin/tests/e2e_playwright/run_e2e.py` guida browser Chromium **headless** reali con Playwright e li fa attaccare l'API. Ogni scenario applica evasioni concrete (init-script JS, route blocking, rotazione UA, canvas/WebGL spoof) e POSTa il fingerprint reale a `/api/bitm/collect`.
 
@@ -1137,7 +1271,7 @@ Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` 
 
 ---
 
-## 🕵️ Rilevamento BitM / BitM+ (v7.2)
+## 🕵️ Rilevamento BitM / BitM+
 
 Questa versione aggiunge un livello di rilevamento **specifico per gli stack di attacco BitM / BitM+ documentati in letteratura**, al di sopra del fingerprinting generico di headless / automation.
 
@@ -1216,7 +1350,7 @@ Il system check **S13** verifica che i 3 insiemi restino allineati in CI.
 
 ---
 
-## 📦 Distribuzione Docker + collector.js (v7.3)
+## 📦 Distribuzione Docker + collector.js
 
 Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici principali — sviluppatori che integrano su un sito esistente, utenti non-tecnici che vogliono provarlo subito, ricercatori che studiano BitM. Prima di v7.3 l'onboarding richiedeva ≥ 6 passaggi (pip install, API key, run.py, snippet JS da copiare a mano); ora è un singolo `docker compose up` oppure un singolo `<script>` tag.
 
@@ -1249,7 +1383,7 @@ Il collector popola i campi opzionali letti da `extractor.py::_detect_bitm` usan
 
 ---
 
-## 🧠 Analisi LLM della traiettoria (v7.4)
+## 🧠 Analisi LLM della traiettoria
 
 Il layer di scoring v7.0–v7.3 giudica la **singola richiesta** — UA, canvas, plugin, timing. Il problema: un attaccante che ha già bypassato l'autenticazione (MFA phishing, session-hijacking, token furto) produce richieste fingerprint-pulite da un browser reale e passerebbe `allow` su ogni singolo hit. L'unica firma residua è la **sequenza temporale** di pagine visitate: cambio password entro 2s dal login, accesso diretto a `/admin` senza passare da `/login`, navigazione frenetica su endpoint sensibili.
 
@@ -1301,7 +1435,7 @@ Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coni
 
 ---
 
-## 🛡 Estensione browser AURORA (v0.2)
+## 🛡 Estensione browser AURORA
 
 Mentre il backend server-side (`aurora-plugin/`) protegge i **visitatori** di un sito che tu controlli, l'estensione `aurora-extension/` protegge **te stesso** mentre navighi su qualsiasi sito, anche quelli che non hanno installato il plugin. I due componenti sono complementari e possono coesistere. Da v0.2 l'estensione ha tre modalità — `off`, `local` (default, zero rete) e `hybrid` (opt-in: interroga il backend per spiegazioni LLM e trajectory pattern) — selezionabili dal popup → **Impostazioni**.
 
