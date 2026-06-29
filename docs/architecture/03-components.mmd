@@ -1,0 +1,14 @@
+flowchart TB
+    req["POST /api/bitm/collect"] --> mw["GeoIP middleware<br/>main.py"]
+    mw --> rate["rate_check<br/>redis_client.py"]
+    rate --> blocked["is_blocked<br/>redis_client.py"]
+    blocked --> sess["session load / merge<br/>redis_client.py"]
+    sess --> extract["extract_features<br/>extractor.py"]
+    extract --> fast{"_fast_rules<br/>main.py"}
+    fast -->|"segnale critico<br/>(skip LLM)"| policy["decide<br/>policy.py"]
+    fast -->|"nessun match"| scorer["score_session<br/>scorer.py (LLM)"]
+    scorer --> policy
+    policy --> persist["persist + log_event<br/>redis_client.py · logger.py"]
+    persist --> broad["broadcaster.publish<br/>broadcaster.py"]
+    broad --> notif["notify_block<br/>notifier.py"]
+    notif --> resp["risposta JSON"]

@@ -1,0 +1,20 @@
+flowchart TB
+    user(["Utente / Browser"])
+    site["Sito web protetto"]
+    analyst(["Analista di sicurezza"])
+
+    subgraph aurora["AURORA — Detection BitM"]
+        core["Servizi AURORA"]
+    end
+
+    llm[("LLM Provider<br/>Anthropic / Ollama")]
+    geo[("MaxMind GeoLite2")]
+    siem[("SIEM / Slack / Teams")]
+
+    user -->|naviga| site
+    site -->|"fingerprint via collector.js"| core
+    user -. "estensione browser" .-> core
+    analyst -->|"dashboard / admin"| core
+    core -->|"scoring"| llm
+    core -->|"lookup IP"| geo
+    core -->|"alert su BLOCK"| siem

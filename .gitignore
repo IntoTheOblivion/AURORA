@@ -39,6 +39,7 @@ node_modules/
 # Tesi — non ancora pronta per il repo
 tesi/
 
-# Sandbox locale di test attacco BitM (non versionato)
+# Demo locali (sito vittima + sandbox d'attacco BitM) — non versionate
+demo/
 bitm-attack-sandbox/
 aurora-attack-sandbox/
