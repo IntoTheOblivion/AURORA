@@ -2,9 +2,9 @@
 #
 # Usage:
 #   docker compose up                                       # solo api (backend stub, zero-config)
-#   docker compose --profile redis up                       # api + redis (sessioni persistenti multi-worker)
-#   docker compose --profile ollama up                      # api + ollama CPU (funziona ovunque)
-#   docker compose --profile ollama-gpu up                  # api + ollama con NVIDIA GPU (~10x più veloce)
+#   docker compose --profile redis up                       # api + redis
+#   docker compose --profile ollama up                      # api + ollama CPU
+#   docker compose --profile ollama-gpu up                  # api + ollama con NVIDIA GPU
 #   docker compose --profile redis --profile ollama-gpu up  # stack completo con GPU
 #
 # Variabili d'ambiente:

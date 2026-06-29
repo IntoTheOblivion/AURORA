@@ -1,0 +1,25 @@
+sequenceDiagram
+    autonumber
+    participant C as collector.js
+    participant API as API Service
+    participant R as Redis
+    participant X as extractor.py
+    participant L as LLM Scoring
+    participant P as policy.py
+    participant D as Dashboard / SIEM
+
+    C->>API: POST /api/bitm/collect (fingerprint)
+    API->>R: rate_check + is_blocked
+    API->>R: load / merge sessione
+    API->>X: extract_features() → pre_risk_score, signals
+    alt Segnale critico (fast rule)
+        API->>P: decide() — BLOCK, LLM saltato
+    else Nessun segnale critico
+        API->>L: score_session(features)
+        L-->>API: risk_score, verdict, indicators
+        API->>P: decide() — floor + boost + soglie
+    end
+    P-->>API: action + reason
+    API->>R: persist sessione (+ escalation IP)
+    API->>D: publish WS + webhook se BLOCK
+    API-->>C: { action, score, verdict, indicators, ... }

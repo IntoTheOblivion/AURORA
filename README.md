@@ -55,69 +55,6 @@ Sistema di rilevamento in tempo reale di attacchi **Browser-in-the-Middle (BitM)
 
 ---
 
-## ⚡ Quickstart
-
-Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvio grazie al backend `stub` deterministico.
-
-### A. Provalo subito con Docker (~30 secondi)
-
-```bash
-git clone https://github.com/IntoTheOblivion/AURORA.git && cd AURORA
-docker compose up --build
-```
-
-Apri `http://localhost:8000/` per la pagina di test e `http://localhost:8000/dashboard` per la dashboard real-time.
-Nessuna configurazione necessaria: il servizio parte con `LLM_BACKEND=stub` (scorer deterministico basato su `pre_risk_score` + segnali BitM/BitM+).
-
-Per usare un LLM reale:
-
-```bash
-# Anthropic cloud (richiede API key)
-LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
-
-# Ollama locale (nessun costo ricorrente) — CPU, funziona ovunque
-docker compose --profile ollama up
-docker exec -it aurora-ollama ollama pull llama3.1
-LLM_BACKEND=ollama docker compose --profile ollama up
-
-# ...oppure con GPU NVIDIA (~10x più veloce, richiede nvidia-container-toolkit / WSL2)
-LLM_BACKEND=ollama docker compose --profile ollama-gpu up
-```
-
-### B. Integrazione one-liner su un sito esistente
-
-Una volta avviato il backend (locale o remoto), aggiungi questo tag al sito da proteggere:
-
-```html
-<script src="https://<host>:8000/collector.js"
-        data-endpoint="https://<host>:8000/api/bitm/collect"
-        data-auto="true"></script>
-```
-
-Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, marker BitM/BitM+) e invia a `/api/bitm/collect` al caricamento della pagina. L'oggetto `window.BitM` espone `BitM.classify()`, `BitM.fingerprint()` e `BitM.onResult(fn)` per integrazioni programmatiche.
-
-### C. Ricercatori e studenti
-
-```bash
-docker run --rm -p 8000:8000 ghcr.io/intotheoblivion/aurora:latest
-```
-
-Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento (Tommasi 2021, Tzschoppe 2023, Catalano 2025) sono citati in §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm).
-
-### D. Protezione lato utente con l'estensione browser
-
-Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), carica l'estensione `aurora-extension/`:
-
-1. `chrome://extensions` (oppure `edge://extensions`)
-2. Attiva "Modalità sviluppatore" in alto a destra
-3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `aurora-extension/`
-
-In modalità `local` (default) l'estensione gira 100% lato client: nessuna connessione al backend, nessun dato inviato in rete. La modalità `hybrid` (opt-in) può invece interrogare il backend per spiegazioni LLM. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora) per il dettaglio.
-
----
-
----
-
 ## 🚀 Caratteristiche
 
 | Feature | Descrizione |
@@ -310,6 +247,67 @@ In contesti `login`, `payment`, `admin`, segnali deboli amplificano lo score con
 | `no_timezone` / `suspicious_resolution` | +0.06 |
 | `no_webgl_renderer` / `elevated_latency` | +0.05 |
 | `zero_plugins` | +0.03 |
+
+---
+
+## ⚡ Quickstart
+
+Tre percorsi per provare il progetto. Nessuno richiede una API key al primo avvio grazie al backend `stub` deterministico.
+
+### A. Provalo subito con Docker (~30 secondi)
+
+```bash
+git clone https://github.com/IntoTheOblivion/AURORA.git && cd AURORA
+docker compose up --build
+```
+
+Apri `http://localhost:8000/` per la pagina di test e `http://localhost:8000/dashboard` per la dashboard real-time.
+Nessuna configurazione necessaria: il servizio parte con `LLM_BACKEND=stub` (scorer deterministico basato su `pre_risk_score` + segnali BitM/BitM+).
+
+Per usare un LLM reale:
+
+```bash
+# Anthropic cloud (richiede API key)
+LLM_BACKEND=anthropic ANTHROPIC_API_KEY=sk-ant-... docker compose up
+
+# Ollama locale (nessun costo ricorrente) — CPU, funziona ovunque
+docker compose --profile ollama up
+docker exec -it aurora-ollama ollama pull llama3.1
+LLM_BACKEND=ollama docker compose --profile ollama up
+
+# ...oppure con GPU NVIDIA (~10x più veloce, richiede nvidia-container-toolkit / WSL2)
+LLM_BACKEND=ollama docker compose --profile ollama-gpu up
+```
+
+### B. Integrazione one-liner su un sito esistente
+
+Una volta avviato il backend (locale o remoto), aggiungi questo tag al sito da proteggere:
+
+```html
+<script src="https://<host>:8000/collector.js"
+        data-endpoint="https://<host>:8000/api/bitm/collect"
+        data-auto="true"></script>
+```
+
+Il collector raccoglie il fingerprint (UA, plugins, WebGL/canvas, timezone, marker BitM/BitM+) e invia a `/api/bitm/collect` al caricamento della pagina. L'oggetto `window.BitM` espone `BitM.classify()`, `BitM.fingerprint()` e `BitM.onResult(fn)` per integrazioni programmatiche.
+
+### C. Ricercatori e studenti
+
+```bash
+docker run --rm -p 8000:8000 ghcr.io/intotheoblivion/aurora:latest
+```
+
+Poi apri `http://localhost:8000/` e clicca "Simula attacco BitM" per vedere la pipeline in azione. I paper di riferimento (Tommasi 2021, Tzschoppe 2023, Catalano 2025) sono citati in §[Rilevamento BitM/BitM+](#-rilevamento-bitm--bitm).
+
+### D. Protezione lato utente con l'estensione browser
+
+Se vuoi proteggere **te stesso** mentre navighi su qualsiasi sito (non il tuo), carica l'estensione `aurora-extension/`:
+
+1. `chrome://extensions` (oppure `edge://extensions`)
+2. Attiva "Modalità sviluppatore" in alto a destra
+3. Clicca "Carica estensione non pacchettizzata" e seleziona la cartella `aurora-extension/`
+
+In modalità `local` (default) l'estensione gira 100% lato client: nessuna connessione al backend, nessun dato inviato in rete. La modalità `hybrid` (opt-in) può invece interrogare il backend per spiegazioni LLM. Vedi §[Estensione browser AURORA](#-estensione-browser-aurora) per il dettaglio.
 
 ---
 
@@ -897,6 +895,137 @@ Il campo `ip_meta` può essere aggiunto per ambienti di test/sviluppo senza feed
 
 ---
 
+## 🕵️ Rilevamento BitM / BitM+
+
+Questa versione aggiunge un livello di rilevamento **specifico per gli stack di attacco BitM / BitM+ documentati in letteratura**, al di sopra del fingerprinting generico di headless / automation.
+
+### Minaccia — riepilogo tecnico
+
+| Variante | Tooling attaccante | Riferimento |
+|---------|--------------------|-------------|
+| **BitM — RFB variant** | noVNC (client JS) + WebSockify (WS↔RFB proxy) + TigerVNC (server Linux con Firefox fullscreen) | Tommasi 2021, Tzschoppe 2023 §4.1 |
+| **BitM — RDP variant** | Apache Guacamole (web client su Tomcat) + estensione NoAuth + FreeRDP + Windows RDP server | Tzschoppe 2023 §4.2 |
+| **BitM+** | Docker BE: Node.js + Express.js (**MalSrv** su `:3081`) + Puppeteer-controlled Chromium + noVNC (`:6080`) esposto via **ngrok HTTPS tunnel** (HTTPS richiesto da WebAuthn); **xssPayload** riflesso nell'URL (`xURL`) che sovrascrive `navigator.credentials.get()` con `evilGet()` per inoltrare la challenge FIDO2/WebAuthn a V | Catalano 2025 |
+
+### Firme rilevate
+
+Il plugin estrae 9 nuovi segnali diagnostici da campi opzionali del payload (il collector lato client può fornirli o no — i campi mancanti semplicemente non contribuiscono):
+
+| Segnale | Trigger | Peso pre-score | Severità |
+|---------|---------|----------------|----------|
+| `novnc_client_marker` | `document.title` contiene `noVNC` / `Websockify` | +0.80 | **CRITICAL → BLOCK** |
+| `guacamole_client_marker` | `document.title` contiene `Guacamole` | +0.80 | **CRITICAL → BLOCK** |
+| `bitm_framework_ua` | User-Agent contiene `noVNC` / `websockify` / `guacamole` / `tigervnc` (PoC non-stealth) | +0.80 | **CRITICAL → BLOCK** |
+| `bitm_backend_port` | URL pagina/referrer su porte BE BitM+ (`:3081` Express MalSrv, `:6080` noVNC, `:4822` Guacamole Tomcat, `:5900` VNC) | +0.78 | **CRITICAL → BLOCK** |
+| `xss_reflected_param` | URL contiene payload XSS: `<script`, `onerror=`, `javascript:`, `document.createElement`, `appendChild`, `loadFromAttacker`, `eval(`, `fromCharCode` | +0.70 | **CRITICAL → BLOCK** |
+| `webauthn_api_override` | `navigator.credentials.get.toString()` non è `[native code]` → probabile `evilGet()` (BitM+) | +0.70 | **CRITICAL → BLOCK** |
+| `bitm_websocket_transport` | WS endpoint su host tunneling, porta BE, o path `/websockify`, `/vnc`, `/guacamole` | +0.55 | **CRITICAL → BLOCK** |
+| `tunnel_host` | `pageUrl` o `referrer` su tunnel HTTPS (`*.ngrok.io`, `*.ngrok-free.app`, `*.ngrok.app`, `*.ngrok.dev`, `*.trycloudflare.com`, `*.loca.lt`, `*.localtunnel.me`, `*.serveo.net`) | +0.25 | weak — amplifica su login/payment/admin |
+| `iframe_overlay` | ≥ 5 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
+
+### Come arrivare alle firme dal client
+
+Il plugin è agnostico rispetto al collector. Un collector JavaScript lato sito può facilmente aggiungere questi campi al POST `/api/bitm/collect`:
+
+```js
+// client-side snippet
+fetch('/api/bitm/collect', { method: 'POST', body: JSON.stringify({
+  // ... i campi esistenti (userAgent, plugins, webgl, canvas, …)
+  pageUrl:  window.location.href,
+  referrer: document.referrer,
+  title:    document.title,
+  iframeCount: document.getElementsByTagName('iframe').length,
+  credentialsGetNative: (navigator.credentials?.get
+      ? /\[native code\]/.test(Function.prototype.toString.call(navigator.credentials.get))
+      : null),
+  // wsEndpoints: lista degli URL WS aperti (se il collector li traccia)
+})});
+```
+
+### Campi `CRITICAL_BLOCK` e fast-path
+
+I label BitM/BitM+ sono replicati su tre livelli per coerenza architetturale:
+
+1. `app/extractor.py::_detect_bitm` — produce i label
+2. `app/policy.py::CRITICAL_BLOCK` — forza BLOCK quando uno di questi compare negli `indicators` (unione di LLM + extractor)
+3. `app/main.py::_fast_rules` — propaga i label già calcolati dall'extractor nel fast-path, evitando la chiamata LLM
+
+Il system check **S13** verifica che i 3 insiemi restino allineati in CI.
+
+### Casi di test dedicati (T21–T29)
+
+| ID | Scenario | Atteso |
+|----|----------|--------|
+| T21 | BitM RFB — `title="Login - noVNC"` + `pageUrl` ngrok | `block` |
+| T22 | BitM RDP — `title="Apache Guacamole"` + porta `:8080` | `block` |
+| T23 | BitM+ — xURL con `?xssParam={loadFromAttacker(...)}` | `block` |
+| T24 | BitM+ — `credentialsGetNative=false` → `evilGet()` | `block` |
+| T25 | BitM+ — `pageUrl` su `:6080`, `referrer` su `:3081/getChallenge` | `block` |
+| T26 | BitM — UA contiene `noVNC/1.4.0` (PoC non-stealth) | `block` |
+| T27 | BitM+ — `wsEndpoints=["wss://...ngrok.../websockify"]` | `block` |
+| T28 | Dev ngrok legittimo su `/login` | `challenge` o `block` |
+| T29 | `credentialsGetNative=true` → WebAuthn API nativa | `allow` |
+
+### Limiti noti
+
+- L'attaccante può **mascherare il `document.title`** (Tzschoppe 2023 segnala che basta rimuovere il suffisso `-noVNC` dalla build di noVNC, e Guacamole permette l'override del thumbnail). I marker di titolo sono quindi firme "a bassa difesa": utili su PoC e operatori distratti, non su APT. I segnali **forti indipendenti dalla collaborazione dell'attaccante** sono `tunnel_host`, `xss_reflected_param`, `webauthn_api_override` e `bitm_backend_port`.
+- `tunnel_host` da solo **non** blocca (ngrok è legittimo in sviluppo): richiede coincidenza con un contesto sensibile (`login`/`payment`/`admin`) o con un altro segnale BitM.
+- L'override di `navigator.credentials.get` richiede che il collector sia eseguito **dopo** il payload XSS — su una pagina BitM+ pulita, prima dell'injection, il segnale può non scattare. La difesa raccomandata rimane l'attestation/subject-verification lato Relying Party (cfr. Catalano 2025 §6).
+
+---
+
+## 🧠 Analisi LLM della traiettoria
+
+Il layer di scoring v7.0–v7.3 giudica la **singola richiesta** — UA, canvas, plugin, timing. Il problema: un attaccante che ha già bypassato l'autenticazione (MFA phishing, session-hijacking, token furto) produce richieste fingerprint-pulite da un browser reale e passerebbe `allow` su ogni singolo hit. L'unica firma residua è la **sequenza temporale** di pagine visitate: cambio password entro 2s dal login, accesso diretto a `/admin` senza passare da `/login`, navigazione frenetica su endpoint sensibili.
+
+La v7.4 aggiunge `analyze_trajectory` (`app/scorer.py`) — un **secondo layer LLM** post-scoring, chiamato in parallelo a `score_session` via `asyncio.gather`. Input: `pages[]`, `timings[]`, `pre_risk_score`, `confirmed_signals`, `context`. Output JSON:
+
+```json
+{
+  "trajectory_score": 0.62,
+  "pattern": "panic_password_change",
+  "explanation_user": "Questa sessione ha cambiato la password subito dopo il login, un comportamento tipico di account takeover.",
+  "explanation_admin": "login→account/verify→change-password in 1.8s; pattern compatibile con post-MFA-phishing account takeover"
+}
+```
+
+Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.25`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
+
+### Abilitazione
+
+```bash
+# .env — una sola delle tre righe va decommentata
+LLM_TRAJECTORY_ANALYSIS=auto   # default: on se backend reale, off con stub
+# LLM_TRAJECTORY_ANALYSIS=on   # forza on (anche su stub, usato dai test)
+# LLM_TRAJECTORY_ANALYSIS=off  # disabilita sempre
+TRAJECTORY_CACHE_TTL=60        # cache session-keyed per evitare token-burn
+```
+
+### Invariante regressione-zero
+
+Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test S16–S20 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
+
+### Costo indicativo (Anthropic Haiku)
+
+- Prompt: ~400 token input, ~80 token output per chiamata
+- < $0.002 per trajectory analysis su Claude Haiku
+- Cache 60s per sessione → ping ripetuti sulla stessa sessione non ri-spendono
+- Short-circuit se `len(pages) < 2` → zero chiamate LLM su sessioni appena create
+- **Short-circuit deterministico v7.4.2**: se la sequenza non contiene nessun marker sensibile (login / change-password / `/admin` / ≥5 pagine in <2s), il layer ritorna `normal_flow` prima di chiamare l'LLM. Elimina ~1s di round-trip su sessioni benigne (homepage, articoli, catalogo) e rende la cache fingerprint davvero osservabile anche alla seconda richiesta della stessa sessione
+
+### Pattern deterministici (stub backend)
+
+Per garantire CI riproducibile senza API key, lo stub implementa 3 regole hardcoded (nessuna è speculativa — sono tratte dagli incident pattern documentati):
+
+- `panic_password_change` — login seguito da change-password entro 5s (score 0.55)
+- `direct_admin_access` — `/admin` visitato senza passare da `/login` (score 0.40)
+- `rapid_navigation` — ≥ 5 pagine in <2s totali (score 0.28)
+- `normal_flow` — nessun pattern (score 0.0, no-op)
+
+Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coniare pattern nuovi dalla sequenza; la validazione normalizza lo score nel range [0, 1] e blinda il formato JSON con `format: "json"` lato Ollama.
+
+---
+
 ## 🔒 Sicurezza e deployment hardening
 
 Il backend default è **open-by-default** per onboarding rapido (`docker compose up` funziona senza altra configurazione). Prima di esporlo su Internet imposta almeno `ADMIN_TOKEN` e `TRUSTED_PROXIES` in `.env`.
@@ -1068,69 +1197,61 @@ Ogni richiesta produce una riga JSON in `aurora_events.jsonl`:
 
 ---
 
-## 🎓 Fine-tuning LoRA
+## 🧪 Test
 
-La cartella `aurora-plugin/training/` contiene l'infrastruttura per specializzare LLaMA 3.1 sulle decisioni dello scorer, riducendo progressivamente la dipendenza da backend cloud.
+La test suite copre **49 scenari** suddivisi in 5 categorie:
 
-### Prompt compatto
+| Categoria | N° | Scenari |
+|-----------|----|---------|
+| `legit` | 5 | Chrome/Windows, Firefox/macOS, Safari/iPhone, Edge/Windows, Chrome Android |
+| `attack` | 13 | HeadlessChrome, Playwright+SwiftShader, Selenium, Tor, Puppeteer, latenza estrema + **T21–T27** BitM/BitM+ (noVNC title, Guacamole title, xssPayload URL, evilGet override, MalSrv port, noVNC UA leak, ngrok WS) |
+| `suspicious` | 6 | VPN+login, latenza alta+payment, VPN+canvas vuoto, timezone anomala, risoluzione sospetta, **T28 ngrok-dev+login** |
+| `edge` | 5 | Payload minimo, UA unicode, static asset, path sconosciuto, **T29 WebAuthn API nativa** |
+| `system` | 20 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field/non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13** allineamento label BitM, **S14–S15** collector.js + payload, **S16–S20** trajectory analysis |
 
-Il `SYSTEM_PROMPT` in `app/scorer.py` è stato riscritto in versione v7 — **609 caratteri contro i 1080 della v6 (~43% in meno)** — preservando le 4 direttive essenziali: output JSON puro, schema con enum, mappatura soglie→verdict, floor su `pre_risk_score`. Meno token in input = minor latenza per inferenza e (su Anthropic) minor costo per chiamata. La motivazione della riduzione è documentata in `app/scorer.py` sopra la costante.
-
-### 1. Conversione log → dataset (`build_dataset.py`)
-
-Converte `aurora_events.jsonl` in un dataset SFT in formato **ChatML** (`{"messages":[system,user,assistant]}`) compatibile con `trl.SFTTrainer` e HuggingFace Datasets.
-
-Pulizia applicata:
-
-- scarta entry `from_cache=true` (duplicati inferenziali)
-- scarta entry con indicator tecnici (`api_error`, `ollama_*_error`, `llm_parse_error`, …)
-- deduplica per `(ua[:60], verdict, pre_score)` → rimuove session replay ripetitivi
-- enforcea la stessa coerenza `verdict↔score` di `scorer._validate_result`
-
-Output: `train.jsonl`, `val.jsonl`, `stats.json`.
+### Esecuzione
 
 ```bash
-cd aurora-plugin
-python training/build_dataset.py \
-    --input aurora_events.jsonl \
-    --output-dir training/dataset \
-    --val-split 0.1 \
-    --max-per-class 500      # opzionale, bilancia le 3 classi
+# Avvia prima il server
+python run.py
+
+# Full suite (da un secondo terminale)
+python tests/run_tests.py
+
+# Filtri
+python tests/run_tests.py --filter attack
+python tests/run_tests.py --filter legit,suspicious
+python tests/run_tests.py --only T06,T11
+python tests/run_tests.py --parallel 4
+python tests/run_tests.py --skip-system
 ```
 
-### 2. Fine-tuning LoRA (`train_lora.py`)
+Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` al termine ed esce con codice `0` solo se tutti i test passano.
 
-Training LoRA efficiente con `transformers` + `peft` + `trl.SFTTrainer`, 4-bit NF4 via `bitsandbytes` (opzionale), gradient checkpointing, target modules dell'architettura LLaMA.
+### System check (S01–S20)
 
-```bash
-# Dipendenze (solo sulla macchina di training, non nel runtime)
-pip install "transformers>=4.44" "peft>=0.12" "trl>=0.10" \
-            "datasets>=2.20" "accelerate>=0.33" "bitsandbytes>=0.43"
-
-# Training su GPU (8B in 4bit)
-python training/train_lora.py \
-    --dataset-dir training/dataset \
-    --base-model meta-llama/Meta-Llama-3.1-8B-Instruct \
-    --output-dir training/lora-bitm-v7 \
-    --epochs 3 --batch-size 2 --grad-accum 8
-
-# Smoke test CPU (modello minuscolo, nessuna quantizzazione)
-python training/train_lora.py \
-    --dataset-dir training/dataset \
-    --base-model sshleifer/tiny-gpt2 \
-    --output-dir training/smoke \
-    --no-4bit --epochs 1 --batch-size 1 --grad-accum 1
-```
-
-| Parametro | Default | Note |
-|-----------|---------|------|
-| `--lora-r` | 16 | Rank adapter LoRA |
-| `--lora-alpha` | 32 | Scaling LoRA |
-| `--lora-dropout` | 0.05 | |
-| `--max-seq-len` | 2048 | Più lungo = più memoria |
-| `--no-4bit` | off | Disabilita `bitsandbytes` (CPU/debug) |
-
-L'adapter salvato è caricabile a runtime con `peft.PeftModel.from_pretrained(base_model, "training/lora-bitm-v7")` per l'inferenza locale via Ollama/vLLM.
+| ID | Verifica |
+|----|----------|
+| S01 | `/health` espone `version` (major ≥ 6; runtime attuale 7.4.3), `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
+| S02 | Sessione multi-step: `request_count` cresce a ogni POST sullo stesso `sessionId` |
+| S03 | IP-block escalation: 3 BLOCK consecutivi → IP nel set bloccati permanenti |
+| S04 | Rate-limit: 40 richieste in rapida successione → almeno una `429` |
+| S05 | GeoIP: IP loopback/privato non produce errori, `/health` rimane `200` |
+| S06 | `DELETE /api/bitm/sessions` azzera sessioni e IP bloccati |
+| S07 | Cache LLM: seconda chiamata con stesso fingerprint non è più lenta della prima |
+| S08 | `/health` campo `webhook` ha struttura valida (`enabled`; se attivo: `type`, `url`, `timeout`, `retries`) |
+| S09 | BLOCK con webhook irraggiungibile: round-trip < 4000ms (notifier non-blocking) |
+| **S10** | **Prompt v7 ≤ 650 caratteri e direttive essenziali preservate (JSON/LEGITIMATE/SUSPICIOUS/ATTACK/pre_risk_score/BitM)** |
+| **S11** | **`build_dataset.py` su fixture: scarta `from_cache` e `api_error`, conserva le 3 classi, emette ChatML (system/user/assistant) con target JSON valido** |
+| **S12** | **`train_lora.py --help` termina con exit 0 ed espone tutti i flag principali (`--dataset-dir`, `--base-model`, `--output-dir`, `--lora-r`, `--lora-alpha`, `--no-4bit`)** |
+| **S13** | **Label BitM/BitM+ allineati fra `extractor._detect_bitm` e `policy.CRITICAL_BLOCK` (regressione su v7.2)** |
+| **S14** | **`GET /collector.js`: risponde 200, MIME JS, e contiene `/api/bitm/collect` + `window.BitM`** |
+| **S15** | **POST di un payload collector-shaped su pagina BitM noVNC simulata → i segnali forti BitM/BitM+ scattano (contratto collector↔extractor)** |
+| **S16** | **`/health` espone `trajectory_analysis` (bool) coerente con la env var** |
+| **S17** | **Stub trajectory deterministico: stessa sequenza ripetuta 3× → stesso `trajectory_pattern`** |
+| **S18** | **`login → change-password` entro 5s → pattern famiglia `panic_password_change` + almeno `challenge`** |
+| **S19** | **`/admin` senza passare da `/login` → `direct_admin_access`** |
+| **S20** | **Sessione con una sola pagina → short-circuit `insufficient_history` senza chiamare l'LLM** |
 
 ---
 
@@ -1213,143 +1334,6 @@ Per evitare dipendenze esterne in CI e sblocccare detection_rate significativi, 
 
 ---
 
-## 🧪 Test
-
-La test suite copre **49 scenari** suddivisi in 5 categorie:
-
-| Categoria | N° | Scenari |
-|-----------|----|---------|
-| `legit` | 5 | Chrome/Windows, Firefox/macOS, Safari/iPhone, Edge/Windows, Chrome Android |
-| `attack` | 13 | HeadlessChrome, Playwright+SwiftShader, Selenium, Tor, Puppeteer, latenza estrema + **T21–T27** BitM/BitM+ (noVNC title, Guacamole title, xssPayload URL, evilGet override, MalSrv port, noVNC UA leak, ngrok WS) |
-| `suspicious` | 6 | VPN+login, latenza alta+payment, VPN+canvas vuoto, timezone anomala, risoluzione sospetta, **T28 ngrok-dev+login** |
-| `edge` | 5 | Payload minimo, UA unicode, static asset, path sconosciuto, **T29 WebAuthn API nativa** |
-| `system` | 20 | Health, session persistence, IP-block escalation, rate-limit, GeoIP, admin clear, cache, webhook field/non-blocking, prompt v7 compatto, dataset builder, train LoRA CLI, **S13** allineamento label BitM, **S14–S15** collector.js + payload, **S16–S20** trajectory analysis |
-
-### Esecuzione
-
-```bash
-# Avvia prima il server
-python run.py
-
-# Full suite (da un secondo terminale)
-python tests/run_tests.py
-
-# Filtri
-python tests/run_tests.py --filter attack
-python tests/run_tests.py --filter legit,suspicious
-python tests/run_tests.py --only T06,T11
-python tests/run_tests.py --parallel 4
-python tests/run_tests.py --skip-system
-```
-
-Il runner azzera automaticamente lo stato all'inizio, scrive `test_report.json` al termine ed esce con codice `0` solo se tutti i test passano.
-
-### System check (S01–S20)
-
-| ID | Verifica |
-|----|----------|
-| S01 | `/health` espone `version` (major ≥ 6; runtime attuale 7.4.3), `store`, `geoip`, `sessions`, `blocked_ips`, `webhook` |
-| S02 | Sessione multi-step: `request_count` cresce a ogni POST sullo stesso `sessionId` |
-| S03 | IP-block escalation: 3 BLOCK consecutivi → IP nel set bloccati permanenti |
-| S04 | Rate-limit: 40 richieste in rapida successione → almeno una `429` |
-| S05 | GeoIP: IP loopback/privato non produce errori, `/health` rimane `200` |
-| S06 | `DELETE /api/bitm/sessions` azzera sessioni e IP bloccati |
-| S07 | Cache LLM: seconda chiamata con stesso fingerprint non è più lenta della prima |
-| S08 | `/health` campo `webhook` ha struttura valida (`enabled`; se attivo: `type`, `url`, `timeout`, `retries`) |
-| S09 | BLOCK con webhook irraggiungibile: round-trip < 4000ms (notifier non-blocking) |
-| **S10** | **Prompt v7 ≤ 650 caratteri e direttive essenziali preservate (JSON/LEGITIMATE/SUSPICIOUS/ATTACK/pre_risk_score/BitM)** |
-| **S11** | **`build_dataset.py` su fixture: scarta `from_cache` e `api_error`, conserva le 3 classi, emette ChatML (system/user/assistant) con target JSON valido** |
-| **S12** | **`train_lora.py --help` termina con exit 0 ed espone tutti i flag principali (`--dataset-dir`, `--base-model`, `--output-dir`, `--lora-r`, `--lora-alpha`, `--no-4bit`)** |
-| **S13** | **Label BitM/BitM+ allineati fra `extractor._detect_bitm` e `policy.CRITICAL_BLOCK` (regressione su v7.2)** |
-| **S14** | **`GET /collector.js`: risponde 200, MIME JS, e contiene `/api/bitm/collect` + `window.BitM`** |
-| **S15** | **POST di un payload collector-shaped su pagina BitM noVNC simulata → i segnali forti BitM/BitM+ scattano (contratto collector↔extractor)** |
-| **S16** | **`/health` espone `trajectory_analysis` (bool) coerente con la env var** |
-| **S17** | **Stub trajectory deterministico: stessa sequenza ripetuta 3× → stesso `trajectory_pattern`** |
-| **S18** | **`login → change-password` entro 5s → pattern famiglia `panic_password_change` + almeno `challenge`** |
-| **S19** | **`/admin` senza passare da `/login` → `direct_admin_access`** |
-| **S20** | **Sessione con una sola pagina → short-circuit `insufficient_history` senza chiamare l'LLM** |
-
----
-
-## 🕵️ Rilevamento BitM / BitM+
-
-Questa versione aggiunge un livello di rilevamento **specifico per gli stack di attacco BitM / BitM+ documentati in letteratura**, al di sopra del fingerprinting generico di headless / automation.
-
-### Minaccia — riepilogo tecnico
-
-| Variante | Tooling attaccante | Riferimento |
-|---------|--------------------|-------------|
-| **BitM — RFB variant** | noVNC (client JS) + WebSockify (WS↔RFB proxy) + TigerVNC (server Linux con Firefox fullscreen) | Tommasi 2021, Tzschoppe 2023 §4.1 |
-| **BitM — RDP variant** | Apache Guacamole (web client su Tomcat) + estensione NoAuth + FreeRDP + Windows RDP server | Tzschoppe 2023 §4.2 |
-| **BitM+** | Docker BE: Node.js + Express.js (**MalSrv** su `:3081`) + Puppeteer-controlled Chromium + noVNC (`:6080`) esposto via **ngrok HTTPS tunnel** (HTTPS richiesto da WebAuthn); **xssPayload** riflesso nell'URL (`xURL`) che sovrascrive `navigator.credentials.get()` con `evilGet()` per inoltrare la challenge FIDO2/WebAuthn a V | Catalano 2025 |
-
-### Firme rilevate
-
-Il plugin estrae 9 nuovi segnali diagnostici da campi opzionali del payload (il collector lato client può fornirli o no — i campi mancanti semplicemente non contribuiscono):
-
-| Segnale | Trigger | Peso pre-score | Severità |
-|---------|---------|----------------|----------|
-| `novnc_client_marker` | `document.title` contiene `noVNC` / `Websockify` | +0.80 | **CRITICAL → BLOCK** |
-| `guacamole_client_marker` | `document.title` contiene `Guacamole` | +0.80 | **CRITICAL → BLOCK** |
-| `bitm_framework_ua` | User-Agent contiene `noVNC` / `websockify` / `guacamole` / `tigervnc` (PoC non-stealth) | +0.80 | **CRITICAL → BLOCK** |
-| `bitm_backend_port` | URL pagina/referrer su porte BE BitM+ (`:3081` Express MalSrv, `:6080` noVNC, `:4822` Guacamole Tomcat, `:5900` VNC) | +0.78 | **CRITICAL → BLOCK** |
-| `xss_reflected_param` | URL contiene payload XSS: `<script`, `onerror=`, `javascript:`, `document.createElement`, `appendChild`, `loadFromAttacker`, `eval(`, `fromCharCode` | +0.70 | **CRITICAL → BLOCK** |
-| `webauthn_api_override` | `navigator.credentials.get.toString()` non è `[native code]` → probabile `evilGet()` (BitM+) | +0.70 | **CRITICAL → BLOCK** |
-| `bitm_websocket_transport` | WS endpoint su host tunneling, porta BE, o path `/websockify`, `/vnc`, `/guacamole` | +0.55 | **CRITICAL → BLOCK** |
-| `tunnel_host` | `pageUrl` o `referrer` su tunnel HTTPS (`*.ngrok.io`, `*.ngrok-free.app`, `*.ngrok.app`, `*.ngrok.dev`, `*.trycloudflare.com`, `*.loca.lt`, `*.localtunnel.me`, `*.serveo.net`) | +0.25 | weak — amplifica su login/payment/admin |
-| `iframe_overlay` | ≥ 5 iframe nella pagina (tipico di BitM+ per sovrapporre la GUI al RP) | +0.15 | weak — amplifica su login/payment/admin |
-
-### Come arrivare alle firme dal client
-
-Il plugin è agnostico rispetto al collector. Un collector JavaScript lato sito può facilmente aggiungere questi campi al POST `/api/bitm/collect`:
-
-```js
-// client-side snippet
-fetch('/api/bitm/collect', { method: 'POST', body: JSON.stringify({
-  // ... i campi esistenti (userAgent, plugins, webgl, canvas, …)
-  pageUrl:  window.location.href,
-  referrer: document.referrer,
-  title:    document.title,
-  iframeCount: document.getElementsByTagName('iframe').length,
-  credentialsGetNative: (navigator.credentials?.get
-      ? /\[native code\]/.test(Function.prototype.toString.call(navigator.credentials.get))
-      : null),
-  // wsEndpoints: lista degli URL WS aperti (se il collector li traccia)
-})});
-```
-
-### Campi `CRITICAL_BLOCK` e fast-path
-
-I label BitM/BitM+ sono replicati su tre livelli per coerenza architetturale:
-
-1. `app/extractor.py::_detect_bitm` — produce i label
-2. `app/policy.py::CRITICAL_BLOCK` — forza BLOCK quando uno di questi compare negli `indicators` (unione di LLM + extractor)
-3. `app/main.py::_fast_rules` — propaga i label già calcolati dall'extractor nel fast-path, evitando la chiamata LLM
-
-Il system check **S13** verifica che i 3 insiemi restino allineati in CI.
-
-### Casi di test dedicati (T21–T29)
-
-| ID | Scenario | Atteso |
-|----|----------|--------|
-| T21 | BitM RFB — `title="Login - noVNC"` + `pageUrl` ngrok | `block` |
-| T22 | BitM RDP — `title="Apache Guacamole"` + porta `:8080` | `block` |
-| T23 | BitM+ — xURL con `?xssParam={loadFromAttacker(...)}` | `block` |
-| T24 | BitM+ — `credentialsGetNative=false` → `evilGet()` | `block` |
-| T25 | BitM+ — `pageUrl` su `:6080`, `referrer` su `:3081/getChallenge` | `block` |
-| T26 | BitM — UA contiene `noVNC/1.4.0` (PoC non-stealth) | `block` |
-| T27 | BitM+ — `wsEndpoints=["wss://...ngrok.../websockify"]` | `block` |
-| T28 | Dev ngrok legittimo su `/login` | `challenge` o `block` |
-| T29 | `credentialsGetNative=true` → WebAuthn API nativa | `allow` |
-
-### Limiti noti
-
-- L'attaccante può **mascherare il `document.title`** (Tzschoppe 2023 segnala che basta rimuovere il suffisso `-noVNC` dalla build di noVNC, e Guacamole permette l'override del thumbnail). I marker di titolo sono quindi firme "a bassa difesa": utili su PoC e operatori distratti, non su APT. I segnali **forti indipendenti dalla collaborazione dell'attaccante** sono `tunnel_host`, `xss_reflected_param`, `webauthn_api_override` e `bitm_backend_port`.
-- `tunnel_host` da solo **non** blocca (ngrok è legittimo in sviluppo): richiede coincidenza con un contesto sensibile (`login`/`payment`/`admin`) o con un altro segnale BitM.
-- L'override di `navigator.credentials.get` richiede che il collector sia eseguito **dopo** il payload XSS — su una pagina BitM+ pulita, prima dell'injection, il segnale può non scattare. La difesa raccomandata rimane l'attestation/subject-verification lato Relying Party (cfr. Catalano 2025 §6).
-
----
-
 ## 📦 Distribuzione Docker + collector.js
 
 Obiettivo della v7.3: eliminare la barriera d'ingresso per i tre pubblici principali — sviluppatori che integrano su un sito esistente, utenti non-tecnici che vogliono provarlo subito, ricercatori che studiano BitM. Prima di v7.3 l'onboarding richiedeva ≥ 6 passaggi (pip install, API key, run.py, snippet JS da copiare a mano); ora è un singolo `docker compose up` oppure un singolo `<script>` tag.
@@ -1383,55 +1367,69 @@ Il collector popola i campi opzionali letti da `extractor.py::_detect_bitm` usan
 
 ---
 
-## 🧠 Analisi LLM della traiettoria
+## 🎓 Fine-tuning LoRA
 
-Il layer di scoring v7.0–v7.3 giudica la **singola richiesta** — UA, canvas, plugin, timing. Il problema: un attaccante che ha già bypassato l'autenticazione (MFA phishing, session-hijacking, token furto) produce richieste fingerprint-pulite da un browser reale e passerebbe `allow` su ogni singolo hit. L'unica firma residua è la **sequenza temporale** di pagine visitate: cambio password entro 2s dal login, accesso diretto a `/admin` senza passare da `/login`, navigazione frenetica su endpoint sensibili.
+La cartella `aurora-plugin/training/` contiene l'infrastruttura per specializzare LLaMA 3.1 sulle decisioni dello scorer, riducendo progressivamente la dipendenza da backend cloud.
 
-La v7.4 aggiunge `analyze_trajectory` (`app/scorer.py`) — un **secondo layer LLM** post-scoring, chiamato in parallelo a `score_session` via `asyncio.gather`. Input: `pages[]`, `timings[]`, `pre_risk_score`, `confirmed_signals`, `context`. Output JSON:
+### Prompt compatto
 
-```json
-{
-  "trajectory_score": 0.62,
-  "pattern": "panic_password_change",
-  "explanation_user": "Questa sessione ha cambiato la password subito dopo il login, un comportamento tipico di account takeover.",
-  "explanation_admin": "login→account/verify→change-password in 1.8s; pattern compatibile con post-MFA-phishing account takeover"
-}
-```
+Il `SYSTEM_PROMPT` in `app/scorer.py` è stato riscritto in versione v7 — **609 caratteri contro i 1080 della v6 (~43% in meno)** — preservando le 4 direttive essenziali: output JSON puro, schema con enum, mappatura soglie→verdict, floor su `pre_risk_score`. Meno token in input = minor latenza per inferenza e (su Anthropic) minor costo per chiamata. La motivazione della riduzione è documentata in `app/scorer.py` sopra la costante.
 
-Lo `trajectory_score` entra in `policy.decide` come **boost capped separato** (`TRAJ_BOOST_CAP=0.25`, indipendente dal `MAX_BOOST=0.25` del boost contestuale). Non è un floor: può spingere sopra soglia ma non può mai declassare. `explanation_user` viene mostrato dal collector come banner Shadow-DOM in italiano invece di label interne come `headless_ua`. `explanation_admin` + `pattern` appaiono nella colonna Pattern del dashboard con click-row modal per il dettaglio.
+### 1. Conversione log → dataset (`build_dataset.py`)
 
-### Abilitazione
+Converte `aurora_events.jsonl` in un dataset SFT in formato **ChatML** (`{"messages":[system,user,assistant]}`) compatibile con `trl.SFTTrainer` e HuggingFace Datasets.
+
+Pulizia applicata:
+
+- scarta entry `from_cache=true` (duplicati inferenziali)
+- scarta entry con indicator tecnici (`api_error`, `ollama_*_error`, `llm_parse_error`, …)
+- deduplica per `(ua[:60], verdict, pre_score)` → rimuove session replay ripetitivi
+- enforcea la stessa coerenza `verdict↔score` di `scorer._validate_result`
+
+Output: `train.jsonl`, `val.jsonl`, `stats.json`.
 
 ```bash
-# .env — una sola delle tre righe va decommentata
-LLM_TRAJECTORY_ANALYSIS=auto   # default: on se backend reale, off con stub
-# LLM_TRAJECTORY_ANALYSIS=on   # forza on (anche su stub, usato dai test)
-# LLM_TRAJECTORY_ANALYSIS=off  # disabilita sempre
-TRAJECTORY_CACHE_TTL=60        # cache session-keyed per evitare token-burn
+cd aurora-plugin
+python training/build_dataset.py \
+    --input aurora_events.jsonl \
+    --output-dir training/dataset \
+    --val-split 0.1 \
+    --max-per-class 500      # opzionale, bilancia le 3 classi
 ```
 
-### Invariante regressione-zero
+### 2. Fine-tuning LoRA (`train_lora.py`)
 
-Con `LLM_TRAJECTORY_ANALYSIS=off` (default su `LLM_BACKEND=stub`), la pipeline è **identica a v7.3** — i 44 test esistenti passano senza modifiche. I nuovi test S16–S20 esercitano il nuovo path con il backend stub deterministico, quindi la CI copre la feature senza consumare token.
+Training LoRA efficiente con `transformers` + `peft` + `trl.SFTTrainer`, 4-bit NF4 via `bitsandbytes` (opzionale), gradient checkpointing, target modules dell'architettura LLaMA.
 
-### Costo indicativo (Anthropic Haiku)
+```bash
+# Dipendenze (solo sulla macchina di training, non nel runtime)
+pip install "transformers>=4.44" "peft>=0.12" "trl>=0.10" \
+            "datasets>=2.20" "accelerate>=0.33" "bitsandbytes>=0.43"
 
-- Prompt: ~400 token input, ~80 token output per chiamata
-- < $0.002 per trajectory analysis su Claude Haiku
-- Cache 60s per sessione → ping ripetuti sulla stessa sessione non ri-spendono
-- Short-circuit se `len(pages) < 2` → zero chiamate LLM su sessioni appena create
-- **Short-circuit deterministico v7.4.2**: se la sequenza non contiene nessun marker sensibile (login / change-password / `/admin` / ≥5 pagine in <2s), il layer ritorna `normal_flow` prima di chiamare l'LLM. Elimina ~1s di round-trip su sessioni benigne (homepage, articoli, catalogo) e rende la cache fingerprint davvero osservabile anche alla seconda richiesta della stessa sessione
+# Training su GPU (8B in 4bit)
+python training/train_lora.py \
+    --dataset-dir training/dataset \
+    --base-model meta-llama/Meta-Llama-3.1-8B-Instruct \
+    --output-dir training/lora-bitm-v7 \
+    --epochs 3 --batch-size 2 --grad-accum 8
 
-### Pattern deterministici (stub backend)
+# Smoke test CPU (modello minuscolo, nessuna quantizzazione)
+python training/train_lora.py \
+    --dataset-dir training/dataset \
+    --base-model sshleifer/tiny-gpt2 \
+    --output-dir training/smoke \
+    --no-4bit --epochs 1 --batch-size 1 --grad-accum 1
+```
 
-Per garantire CI riproducibile senza API key, lo stub implementa 3 regole hardcoded (nessuna è speculativa — sono tratte dagli incident pattern documentati):
+| Parametro | Default | Note |
+|-----------|---------|------|
+| `--lora-r` | 16 | Rank adapter LoRA |
+| `--lora-alpha` | 32 | Scaling LoRA |
+| `--lora-dropout` | 0.05 | |
+| `--max-seq-len` | 2048 | Più lungo = più memoria |
+| `--no-4bit` | off | Disabilita `bitsandbytes` (CPU/debug) |
 
-- `panic_password_change` — login seguito da change-password entro 5s (score 0.55)
-- `direct_admin_access` — `/admin` visitato senza passare da `/login` (score 0.40)
-- `rapid_navigation` — ≥ 5 pagine in <2s totali (score 0.28)
-- `normal_flow` — nessun pattern (score 0.0, no-op)
-
-Su backend reale (Anthropic / Ollama) il prompt lascia libero il modello di coniare pattern nuovi dalla sequenza; la validazione normalizza lo score nel range [0, 1] e blinda il formato JSON con `format: "json"` lato Ollama.
+L'adapter salvato è caricabile a runtime con `peft.PeftModel.from_pretrained(base_model, "training/lora-bitm-v7")` per l'inferenza locale via Ollama/vLLM.
 
 ---
 

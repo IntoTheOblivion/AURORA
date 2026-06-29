@@ -1,0 +1,25 @@
+flowchart LR
+    subgraph client["Lato client"]
+        collector["collector.js<br/>(sito protetto)"]
+        ext["Estensione AURORA<br/>(MV3, browser)"]
+    end
+
+    subgraph backend["Servizi AURORA"]
+        api["Detection / API Service<br/>FastAPI · app/main.py"]
+        dash["Dashboard real-time<br/>WebSocket /ws/events"]
+    end
+
+    subgraph support["Servizi di supporto"]
+        redis[("Sessioni e Stato<br/>Redis")]
+        llm["LLM Scoring<br/>Ollama / Anthropic"]
+        geo["GeoIP<br/>MaxMind GeoLite2"]
+        notify["Notification<br/>Slack / Teams / SIEM"]
+    end
+
+    collector -->|"POST /api/bitm/collect"| api
+    ext -. "hybrid mode" .-> api
+    api -->|"sessioni · rate-limit"| redis
+    api -->|"score_session()"| llm
+    api -->|"country · ASN"| geo
+    api -->|"webhook su BLOCK"| notify
+    api -->|"publish evento"| dash
